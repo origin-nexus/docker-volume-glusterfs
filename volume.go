@@ -7,11 +7,11 @@ import (
 )
 
 type glusterfsVolume struct {
-	servers    string
-	volumeName string
-	options    map[string]string
+	Servers    string
+	VolumeName string
+	Options    map[string]string
 
-	mountpoint  string
+	Mountpoint  string
 	connections int
 }
 
@@ -27,12 +27,12 @@ func (gv *glusterfsVolume) mount() error {
 }
 
 func (gv *glusterfsVolume) getMountCmd() *exec.Cmd {
-	volumefile := fmt.Sprintf("%v:/%v", gv.servers, gv.volumeName)
+	volumefile := fmt.Sprintf("%v:/%v", gv.Servers, gv.VolumeName)
 	cmd := exec.Command(
-		"mount", "-t", "glusterfs", volumefile, gv.mountpoint,
+		"mount", "-t", "glusterfs", volumefile, gv.Mountpoint,
 		"-o", "log-file=/run/docker/plugins/init-stdout")
 
-	for key, val := range gv.options {
+	for key, val := range gv.Options {
 		if val != "" {
 			cmd.Args = append(cmd.Args, "-o", key+"="+val)
 		} else {
@@ -44,7 +44,7 @@ func (gv *glusterfsVolume) getMountCmd() *exec.Cmd {
 }
 
 func (gv *glusterfsVolume) unmount() error {
-	cmd := exec.Command("umount", gv.mountpoint)
+	cmd := exec.Command("umount", gv.Mountpoint)
 	logrus.Debug(cmd.Args)
 
 	output, err := cmd.CombinedOutput()

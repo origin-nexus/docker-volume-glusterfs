@@ -12,19 +12,19 @@ func TestGetMountCmd(t *testing.T) {
 	}{
 		{
 			glusterfsVolume{
-				servers:    "server1",
-				volumeName: "volume",
-				mountpoint: "/mnt",
+				Servers:    "server1",
+				VolumeName: "volume",
+				Mountpoint: "/mnt",
 			},
 			[]string{"mount", "-t", "glusterfs", "server1:/volume", "/mnt",
 				"-o", "log-file=/run/docker/plugins/init-stdout"},
 		},
 		{
 			glusterfsVolume{
-				servers:    "server1",
-				volumeName: "volume",
-				mountpoint: "/mnt",
-				options: map[string]string{
+				Servers:    "server1",
+				VolumeName: "volume",
+				Mountpoint: "/mnt",
+				Options: map[string]string{
 					"option1": "",
 				},
 			},
@@ -33,10 +33,10 @@ func TestGetMountCmd(t *testing.T) {
 		},
 		{
 			glusterfsVolume{
-				servers:    "server1",
-				volumeName: "volume",
-				mountpoint: "/mnt",
-				options: map[string]string{
+				Servers:    "server1",
+				VolumeName: "volume",
+				Mountpoint: "/mnt",
+				Options: map[string]string{
 					"option": "value",
 				},
 			},

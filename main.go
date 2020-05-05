@@ -16,15 +16,15 @@ func newGlusterfsDriver(root string) (*glusterfsDriver, error) {
 
 	loglevel := os.Getenv("LOGLEVEL")
 	switch loglevel {
-	case "":
-		loglevel = "WARNING"
-		fallthrough
 	case "TRACE":
 		logrus.SetLevel(logrus.TraceLevel)
 	case "DEBUG":
 		logrus.SetLevel(logrus.DebugLevel)
 	case "INFO":
 		logrus.SetLevel(logrus.InfoLevel)
+	case "":
+		loglevel = "WARNING"
+		fallthrough
 	case "WARNING":
 		logrus.SetLevel(logrus.WarnLevel)
 	case "ERROR":
@@ -36,9 +36,6 @@ func newGlusterfsDriver(root string) (*glusterfsDriver, error) {
 	default:
 		return nil, fmt.Errorf("unknown log level '%v'", loglevel)
 	}
-	if loglevel == "" {
-		loglevel = "WARNING"
-	}
 
 	d := &glusterfsDriver{
 		root:       root,
@@ -47,8 +44,8 @@ func newGlusterfsDriver(root string) (*glusterfsDriver, error) {
 		servers:    os.Getenv("SERVERS"),
 		volumeName: os.Getenv("VOLUME_NAME"),
 		state: State{
-			volumes:        map[string]Volume{},
-			glusterVolumes: map[string]*glusterfsVolume{},
+			Volumes:        map[string]Volume{},
+			GlusterVolumes: map[string]glusterfsVolume{},
 		},
 	}
 

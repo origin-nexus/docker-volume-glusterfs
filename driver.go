@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/md5"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,13 +14,13 @@ import (
 )
 
 type Volume struct {
-	glusterVolumeId string
-	mountpoint      string
+	GlusterVolumeId string
+	Mountpoint      string
 }
 
 type State struct {
-	volumes        map[string]Volume
-	glusterVolumes map[string]*glusterfsVolume
+	Volumes        map[string]Volume
+	GlusterVolumes map[string]glusterfsVolume
 }
 
 type glusterfsDriver struct {
@@ -49,60 +48,60 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 
 	d.Lock()
 	defer d.Unlock()
-	gv := &glusterfsVolume{
-		servers:    d.servers,
-		volumeName: d.volumeName,
-		options:    map[string]string{"log-level": d.loglevel},
+	gv := glusterfsVolume{
+		Servers:    d.servers,
+		VolumeName: d.volumeName,
+		Options:    map[string]string{"log-level": d.loglevel},
 	}
 
 	for key, val := range r.Options {
 		switch key {
 		case "backup-volfile-server":
-			return errors.New("'backup-volfile-server' option not supported")
+			return fmt.Errorf("'%v' option not supported", key)
 		case "backup-volfile-servers":
-			return errors.New("'backup-volfile-servers' option not supported")
-		case "logfile":
-			return errors.New("'logfile' option not supported, logs are redirected to managed plugin stdout")
+			return fmt.Errorf("'%v' option not supported", key)
+		case "log-file":
+			return fmt.Errorf("'%v' option not supported, logs are redirected to managed plugin stdout", key)
 		case "servers":
 			if d.servers != "" {
-				return errors.New("'servers' option already set by driver, can not override.")
+				return fmt.Errorf("'%v' option already set by driver, can not override.", key)
 			}
-			gv.servers = val
+			gv.Servers = val
 		case "volume-name":
 			if d.volumeName != "" {
-				return errors.New("'volume-name' option already set by driver, can not override.")
+				return fmt.Errorf("'%v' option already set by driver, can not override.", key)
 			}
-			gv.volumeName = val
+			gv.VolumeName = val
 		default:
-			gv.options[key] = val
+			gv.Options[key] = val
 		}
 	}
 
-	if gv.servers == "" {
+	if gv.Servers == "" {
 		return errors.New("'servers' option required")
 	}
 
 	subdirMount := ""
-	if gv.volumeName == "" {
-		gv.volumeName = r.Name
+	if gv.VolumeName == "" {
+		gv.VolumeName = r.Name
 	} else {
 		subdirMount = r.Name
 	}
 
-	id := fmt.Sprintf("%x", md5.Sum([]byte(gv.servers+"/"+gv.volumeName)))
-	gv.mountpoint = filepath.Join(d.root, gv.servers, gv.volumeName)
-	if existingVolume, ok := d.state.glusterVolumes[id]; ok {
+	id := gv.Servers + "/" + gv.VolumeName
+	gv.Mountpoint = filepath.Join(d.root, gv.Servers, gv.VolumeName)
+	if existingVolume, ok := d.state.GlusterVolumes[id]; ok {
 		gv = existingVolume
 	}
 
-	mountpoint := gv.mountpoint
+	mountpoint := gv.Mountpoint
 
 	if subdirMount != "" {
 		mountpoint = filepath.Join(mountpoint, subdirMount)
 	}
 
-	d.state.volumes[r.Name] = Volume{glusterVolumeId: id, mountpoint: mountpoint}
-	d.state.glusterVolumes[id] = gv
+	d.state.Volumes[r.Name] = Volume{GlusterVolumeId: id, Mountpoint: mountpoint}
+	d.state.GlusterVolumes[id] = gv
 	d.saveState()
 
 	return nil
@@ -114,12 +113,12 @@ func (d *glusterfsDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error)
 	d.Lock()
 	defer d.Unlock()
 
-	v, ok := d.state.volumes[r.Name]
+	v, ok := d.state.Volumes[r.Name]
 	if !ok {
 		return &volume.GetResponse{}, fmt.Errorf("volume %s not found", r.Name)
 	}
 
-	return &volume.GetResponse{Volume: &volume.Volume{Name: r.Name, Mountpoint: v.mountpoint}}, nil
+	return &volume.GetResponse{Volume: &volume.Volume{Name: r.Name, Mountpoint: v.Mountpoint}}, nil
 }
 
 func (d *glusterfsDriver) List() (*volume.ListResponse, error) {
@@ -129,8 +128,8 @@ func (d *glusterfsDriver) List() (*volume.ListResponse, error) {
 	defer d.Unlock()
 
 	var vols []*volume.Volume
-	for name, v := range d.state.volumes {
-		vols = append(vols, &volume.Volume{Name: name, Mountpoint: v.mountpoint})
+	for name, v := range d.state.Volumes {
+		vols = append(vols, &volume.Volume{Name: name, Mountpoint: v.Mountpoint})
 	}
 	return &volume.ListResponse{Volumes: vols}, nil
 }
@@ -141,12 +140,12 @@ func (d *glusterfsDriver) Path(r *volume.PathRequest) (*volume.PathResponse, err
 	d.Lock()
 	defer d.Unlock()
 
-	v, ok := d.state.volumes[r.Name]
+	v, ok := d.state.Volumes[r.Name]
 	if !ok {
 		return &volume.PathResponse{}, fmt.Errorf("volume %s not found", r.Name)
 	}
 
-	return &volume.PathResponse{Mountpoint: v.mountpoint}, nil
+	return &volume.PathResponse{Mountpoint: v.Mountpoint}, nil
 }
 
 func (d *glusterfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
@@ -155,17 +154,17 @@ func (d *glusterfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, 
 	d.Lock()
 	defer d.Unlock()
 
-	v, ok := d.state.volumes[r.Name]
+	v, ok := d.state.Volumes[r.Name]
 	if !ok {
 		return &volume.MountResponse{}, fmt.Errorf("volume %s not found", r.Name)
 	}
 
-	gv := d.state.glusterVolumes[v.glusterVolumeId]
+	gv := d.state.GlusterVolumes[v.GlusterVolumeId]
 
 	if gv.connections == 0 {
-		fi, err := os.Lstat(gv.mountpoint)
+		fi, err := os.Lstat(gv.Mountpoint)
 		if os.IsNotExist(err) {
-			if err := os.MkdirAll(gv.mountpoint, 0755); err != nil {
+			if err := os.MkdirAll(gv.Mountpoint, 0755); err != nil {
 				return &volume.MountResponse{}, err
 			}
 		} else if err != nil {
@@ -174,7 +173,7 @@ func (d *glusterfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, 
 
 		if fi != nil && !fi.IsDir() {
 			return &volume.MountResponse{},
-				fmt.Errorf("%v already exist and it's not a directory", gv.mountpoint)
+				fmt.Errorf("%v already exist and it's not a directory", gv.Mountpoint)
 		}
 
 		if err := gv.mount(); err != nil {
@@ -183,10 +182,10 @@ func (d *glusterfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, 
 	}
 
 	// Create subdirectory if required
-	if v.mountpoint != gv.mountpoint {
-		fi, err := os.Lstat(v.mountpoint)
+	if v.Mountpoint != gv.Mountpoint {
+		fi, err := os.Lstat(v.Mountpoint)
 		if os.IsNotExist(err) {
-			if err := os.MkdirAll(v.mountpoint, 0755); err != nil {
+			if err := os.MkdirAll(v.Mountpoint, 0755); err != nil {
 				if gv.connections == 0 {
 					gv.unmount()
 				}
@@ -204,14 +203,14 @@ func (d *glusterfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, 
 				gv.unmount()
 			}
 			return &volume.MountResponse{},
-				fmt.Errorf("%v already exist and it's not a directory", v.mountpoint)
+				fmt.Errorf("%v already exist and it's not a directory", v.Mountpoint)
 		}
 	}
 
 	gv.connections++
 	d.saveState()
 
-	return &volume.MountResponse{Mountpoint: v.mountpoint}, nil
+	return &volume.MountResponse{Mountpoint: v.Mountpoint}, nil
 }
 
 func (d *glusterfsDriver) Unmount(r *volume.UnmountRequest) error {
@@ -220,12 +219,12 @@ func (d *glusterfsDriver) Unmount(r *volume.UnmountRequest) error {
 	d.Lock()
 	defer d.Unlock()
 
-	v, ok := d.state.volumes[r.Name]
+	v, ok := d.state.Volumes[r.Name]
 	if !ok {
 		return fmt.Errorf("volume %s not found", r.Name)
 	}
 
-	gv := d.state.glusterVolumes[v.glusterVolumeId]
+	gv := d.state.GlusterVolumes[v.GlusterVolumeId]
 
 	if gv.connections > 0 {
 		gv.connections--
@@ -247,12 +246,12 @@ func (d *glusterfsDriver) Remove(r *volume.RemoveRequest) error {
 	d.Lock()
 	defer d.Unlock()
 
-	_, ok := d.state.volumes[r.Name]
+	_, ok := d.state.Volumes[r.Name]
 	if !ok {
 		return fmt.Errorf("volume %s not found", r.Name)
 	}
 
-	delete(d.state.volumes, r.Name)
+	delete(d.state.Volumes, r.Name)
 	d.saveState()
 
 	return nil
@@ -275,7 +274,7 @@ func (d *glusterfsDriver) loadState() error {
 }
 
 func (d *glusterfsDriver) saveState() {
-	data, err := json.Marshal(d.state.volumes)
+	data, err := json.Marshal(d.state)
 	if err != nil {
 		logrus.WithField("statePath", d.statePath).Error(err)
 		return
@@ -284,4 +283,5 @@ func (d *glusterfsDriver) saveState() {
 	if err := ioutil.WriteFile(d.statePath, data, 0644); err != nil {
 		logrus.WithField("savestate", d.statePath).Error(err)
 	}
+
 }
