@@ -14,7 +14,7 @@
             "value": ""
         },
         {
-            "name": "VOLUME",
+            "name": "VOLUME_NAME",
             "settable": [
                 "value"
             ],

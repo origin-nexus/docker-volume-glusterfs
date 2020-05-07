@@ -33,6 +33,7 @@ type glusterfsDriver struct {
 
 	servers    string
 	volumeName string
+	options    map[string]string
 
 	state State
 }
@@ -43,6 +44,22 @@ func (d *glusterfsDriver) Capabilities() *volume.CapabilitiesResponse {
 	return &volume.CapabilitiesResponse{Capabilities: volume.Capability{Scope: "local"}}
 }
 
+func (d *glusterfsDriver) checkOption(key, val string) error {
+	switch key {
+	case "backup-volfile-server":
+		fallthrough
+	case "backup-volfile-servers":
+		return fmt.Errorf("'%v' option not supported", key)
+	case "log-file":
+		return fmt.Errorf("'%v' option not supported, logs are redirected to managed plugin stdout", key)
+	case "servers":
+		fallthrough
+	case "volume-name":
+		return fmt.Errorf("'%v' option not supported in options", key)
+	}
+	return nil
+}
+
 func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 	logrus.WithField("method", "create").Debugf("%#v", r)
 
@@ -51,17 +68,11 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 	gv := glusterfsVolume{
 		Servers:    d.servers,
 		VolumeName: d.volumeName,
-		Options:    map[string]string{"log-level": d.loglevel},
+		Options:    d.options,
 	}
 
 	for key, val := range r.Options {
 		switch key {
-		case "backup-volfile-server":
-			return fmt.Errorf("'%v' option not supported", key)
-		case "backup-volfile-servers":
-			return fmt.Errorf("'%v' option not supported", key)
-		case "log-file":
-			return fmt.Errorf("'%v' option not supported, logs are redirected to managed plugin stdout", key)
 		case "servers":
 			if d.servers != "" {
 				return fmt.Errorf("'%v' option already set by driver, can not override.", key)
@@ -73,6 +84,12 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 			}
 			gv.VolumeName = val
 		default:
+			if err := d.checkOption(key, val); err != nil {
+				return err
+			}
+			if len(d.options) != 0 {
+				return errors.New("Options already set by driver, can not override.")
+			}
 			gv.Options[key] = val
 		}
 	}

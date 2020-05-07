@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -67,5 +68,40 @@ func TestNewGlusterfsDriverLogruslevel(t *testing.T) {
 		if d.loglevel != c.envLevel {
 			t.Errorf("LOGLEVEL '%v' should set logLevel to '%v'", c.envLevel, c.envLevel)
 		}
+	}
+}
+
+func TestUnsupportedOptionsInMain(t *testing.T) {
+	unsupportedOptions := []string{
+		"backup-volfile-server", "backup-volfile-servers", "log-file", "servers",
+		"volume-name", "log-level=ERROR log-file=/whatever"}
+	root := "/myroot"
+
+	for _, option := range unsupportedOptions {
+		os.Setenv("OPTIONS", option)
+		_, err := newGlusterfsDriver(root)
+
+		if err == nil {
+			t.Errorf("Unsupported option '%v' should return error", option)
+		}
+	}
+}
+
+func TestOPTIONvarSetsOptions(t *testing.T) {
+	option_str := "acl log-level=INFO"
+	os.Setenv("OPTIONS", option_str)
+	root := "/myroot"
+	d, err := newGlusterfsDriver(root)
+
+	if err != nil {
+		t.Error("Correct options should not raise error")
+	}
+	if !reflect.DeepEqual(d.options, map[string]string{
+		"acl":       "",
+		"log-level": "INFO",
+	}) {
+		t.Errorf(
+			"Driver options not set correctly from env var OPTIONS='%v': %#v",
+			option_str, d.options)
 	}
 }
