@@ -1,5 +1,5 @@
-PLUGIN_NAME = michael-mri/glusterfs-plugin
-PLUGIN_TAG ?= next
+PLUGIN_NAME = originnexus/glusterfs-plugin
+PLUGIN_TAG ?= dev
 
 all: clean rootfs create
 
