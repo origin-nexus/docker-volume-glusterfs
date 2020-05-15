@@ -37,10 +37,15 @@ func newGlusterfsDriver(root string) (*glusterfsDriver, error) {
 		if len(kv) == 1 {
 			kv = append(kv, "")
 		}
-		if err := d.checkOption(kv[0], kv[1]); err != nil {
-			return nil, err
+		switch kv[0] {
+		case "dedicated-mount":
+			d.dedicatedMounts = true
+		default:
+			if err := d.checkOption(kv[0], kv[1]); err != nil {
+				return nil, err
+			}
+			options[kv[0]] = kv[1]
 		}
-		options[kv[0]] = kv[1]
 	}
 
 	loglevel := os.Getenv("LOGLEVEL")

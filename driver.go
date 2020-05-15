@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 
 	"github.com/docker/go-plugins-helpers/volume"
@@ -29,7 +30,8 @@ type glusterfsDriver struct {
 	root      string
 	statePath string
 
-	loglevel string
+	loglevel        string
+	dedicatedMounts bool
 
 	servers    string
 	volumeName string
@@ -71,6 +73,8 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 		Options:    d.options,
 	}
 
+	dedicatedMount := d.dedicatedMounts
+
 	for key, val := range r.Options {
 		switch key {
 		case "servers":
@@ -83,6 +87,8 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 				return fmt.Errorf("'%v' option already set by driver, can not override.", key)
 			}
 			gv.VolumeName = val
+		case "dedicated-mount":
+			dedicatedMount = true
 		default:
 			if err := d.checkOption(key, val); err != nil {
 				return err
@@ -105,12 +111,28 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 		subdirMount = r.Name
 	}
 
-	id := gv.Servers + "/" + gv.VolumeName
-	gv.Mountpoint = filepath.Join(d.root, gv.Servers, gv.VolumeName)
+	id := ""
+	if dedicatedMount {
+		id = filepath.Join("_dedicated", r.Name)
+	} else {
+		id = filepath.Join(gv.Servers, gv.VolumeName)
+	}
+	gv.Mountpoint = filepath.Join(d.root, id)
 	if existingVolume, ok := d.state.GlusterVolumes[id]; ok {
+		var volumes []string
+		for name, v := range d.state.Volumes {
+			if v.GlusterVolumeId == id {
+				volumes = append(volumes, name)
+			}
+		}
+		if !reflect.DeepEqual(gv.Options, existingVolume.Options) {
+			return fmt.Errorf(
+				"%#v options differ from already created volumes %#v with options %#v"+
+					" use 'dedicated-mount' option to not reuse existing mounts.",
+				gv.Options, volumes, existingVolume.Options)
+		}
 		gv = existingVolume
 	}
-
 	mountpoint := gv.Mountpoint
 
 	if subdirMount != "" {
@@ -290,7 +312,7 @@ func (d *glusterfsDriver) Remove(r *volume.RemoveRequest) error {
 	return nil
 }
 func (d *glusterfsDriver) loadState() error {
-	logrus.WithField("method", "loadState").Debugf("loading state from %v", d.statePath)
+	logrus.WithField("method", "loadState").Debugf("loading state from '%v'", d.statePath)
 	data, err := ioutil.ReadFile(d.statePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -309,7 +331,7 @@ func (d *glusterfsDriver) loadState() error {
 
 func (d *glusterfsDriver) saveState() {
 	logrus.WithField("method", "saveState").Debugf(
-		"saving state %#v to %#v", d.state, d.statePath)
+		"saving state %#v to '%v'", d.state, d.statePath)
 	data, err := json.Marshal(d.state)
 	if err != nil {
 		logrus.WithField("statePath", d.statePath).Error(err)

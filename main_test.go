@@ -104,4 +104,30 @@ func TestOPTIONvarSetsOptions(t *testing.T) {
 			"Driver options not set correctly from env var OPTIONS='%v': %#v",
 			option_str, d.options)
 	}
+	if d.dedicatedMounts {
+		t.Error("Dedicated mounts per docker volume when it was not set in options")
+	}
+}
+
+func TestOPTIONdedicatedMount(t *testing.T) {
+	option_str := "acl log-level=INFO dedicated-mount"
+	os.Setenv("OPTIONS", option_str)
+	root := "/myroot"
+	d, err := newGlusterfsDriver(root)
+
+	if err != nil {
+		t.Error("Correct options should not raise error")
+	}
+	if !reflect.DeepEqual(d.options, map[string]string{
+		"acl":       "",
+		"log-level": "INFO",
+	}) {
+		t.Errorf(
+			"Driver options not set correctly from env var OPTIONS='%v': %#v",
+			option_str, d.options)
+	}
+	if !d.dedicatedMounts {
+		t.Error(
+			"Dedicated mounts was not activated by 'dedicated-mounts' option")
+	}
 }
