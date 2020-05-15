@@ -26,6 +26,13 @@
                 "value"
             ],
             "value": ""
+        },
+        {
+            "name": "LOGLEVEL",
+            "settable": [
+                "value"
+            ],
+            "value": ""
         }
     ],
     "network": {
