@@ -15,8 +15,8 @@ func TestUnsupportedOptions(t *testing.T) {
 
 	d := glusterfsDriver{
 		state: State{
-			Volumes:        map[string]Volume{},
-			GlusterVolumes: map[string]glusterfsVolume{},
+			Volumes:        map[string]*Volume{},
+			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
 	for _, option := range unsupportedOptions {
@@ -37,8 +37,8 @@ func TestNoServerOverride(t *testing.T) {
 	d := glusterfsDriver{
 		servers: "server1,server2",
 		state: State{
-			Volumes:        map[string]Volume{},
-			GlusterVolumes: map[string]glusterfsVolume{},
+			Volumes:        map[string]*Volume{},
+			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
 	r := &volume.CreateRequest{
@@ -58,8 +58,8 @@ func TestNoVolumeOverride(t *testing.T) {
 		servers:    "server1,server2",
 		volumeName: "myvol",
 		state: State{
-			Volumes:        map[string]Volume{},
-			GlusterVolumes: map[string]glusterfsVolume{},
+			Volumes:        map[string]*Volume{},
+			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
 	r := &volume.CreateRequest{
@@ -81,8 +81,8 @@ func TestSubDirMount(t *testing.T) {
 		servers:    "server1,server2",
 		volumeName: "myvol",
 		state: State{
-			Volumes:        map[string]Volume{},
-			GlusterVolumes: map[string]glusterfsVolume{},
+			Volumes:        map[string]*Volume{},
+			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
 	r := &volume.CreateRequest{
@@ -105,8 +105,8 @@ func TestNoSubDirMount(t *testing.T) {
 		root:    "/mnt",
 		servers: "server1,server2",
 		state: State{
-			Volumes:        map[string]Volume{},
-			GlusterVolumes: map[string]glusterfsVolume{},
+			Volumes:        map[string]*Volume{},
+			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
 	r := &volume.CreateRequest{
@@ -139,8 +139,8 @@ func TestStateSaveAndLoad(t *testing.T) {
 		servers:    "server1,server2",
 		volumeName: "myvol",
 		state: State{
-			Volumes:        map[string]Volume{},
-			GlusterVolumes: map[string]glusterfsVolume{},
+			Volumes:        map[string]*Volume{},
+			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
 
@@ -159,7 +159,7 @@ func TestStateSaveAndLoad(t *testing.T) {
 
 	if !reflect.DeepEqual(d.state, d2.state) {
 		t.Errorf(
-			"Loaded state '%v' differs from original state '%v'",
+			"Loaded state '%#v' differs from original state '%#v'",
 			d2.state, d.state)
 	}
 }

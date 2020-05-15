@@ -19,8 +19,8 @@ type Volume struct {
 }
 
 type State struct {
-	Volumes        map[string]Volume
-	GlusterVolumes map[string]glusterfsVolume
+	Volumes        map[string]*Volume
+	GlusterVolumes map[string]*glusterfsVolume
 }
 
 type glusterfsDriver struct {
@@ -65,7 +65,7 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 
 	d.Lock()
 	defer d.Unlock()
-	gv := glusterfsVolume{
+	gv := &glusterfsVolume{
 		Servers:    d.servers,
 		VolumeName: d.volumeName,
 		Options:    d.options,
@@ -117,7 +117,7 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 		mountpoint = filepath.Join(mountpoint, subdirMount)
 	}
 
-	d.state.Volumes[r.Name] = Volume{GlusterVolumeId: id, Mountpoint: mountpoint}
+	d.state.Volumes[r.Name] = &Volume{GlusterVolumeId: id, Mountpoint: mountpoint}
 	d.state.GlusterVolumes[id] = gv
 	d.saveState()
 
@@ -290,6 +290,7 @@ func (d *glusterfsDriver) Remove(r *volume.RemoveRequest) error {
 	return nil
 }
 func (d *glusterfsDriver) loadState() error {
+	logrus.WithField("method", "loadState").Debugf("loading state from %v", d.statePath)
 	data, err := ioutil.ReadFile(d.statePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -307,6 +308,8 @@ func (d *glusterfsDriver) loadState() error {
 }
 
 func (d *glusterfsDriver) saveState() {
+	logrus.WithField("method", "saveState").Debugf(
+		"saving state %#v to %#v", d.state, d.statePath)
 	data, err := json.Marshal(d.state)
 	if err != nil {
 		logrus.WithField("statePath", d.statePath).Error(err)

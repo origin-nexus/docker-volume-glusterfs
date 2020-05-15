@@ -21,8 +21,8 @@ func newGlusterfsDriver(root string) (*glusterfsDriver, error) {
 		servers:    os.Getenv("SERVERS"),
 		volumeName: os.Getenv("VOLUME_NAME"),
 		state: State{
-			Volumes:        map[string]Volume{},
-			GlusterVolumes: map[string]glusterfsVolume{},
+			Volumes:        map[string]*Volume{},
+			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
 
