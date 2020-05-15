@@ -175,8 +175,11 @@ func (d *glusterfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, 
 	if !ok {
 		return &volume.MountResponse{}, fmt.Errorf("volume %s not found", r.Name)
 	}
+	logrus.WithField("method", "mount").Debugf("found volume %#v", v)
 
 	gv := d.state.GlusterVolumes[v.GlusterVolumeId]
+
+	logrus.WithField("method", "mount").Debugf("found gluster volume %#v", gv)
 
 	if gv.connections == 0 {
 		fi, err := os.Lstat(gv.Mountpoint)
@@ -263,12 +266,25 @@ func (d *glusterfsDriver) Remove(r *volume.RemoveRequest) error {
 	d.Lock()
 	defer d.Unlock()
 
-	_, ok := d.state.Volumes[r.Name]
+	v, ok := d.state.Volumes[r.Name]
 	if !ok {
 		return fmt.Errorf("volume %s not found", r.Name)
 	}
 
+	gvId := v.GlusterVolumeId
 	delete(d.state.Volumes, r.Name)
+
+	gvUsed := false
+	for _, v := range d.state.Volumes {
+		if v.GlusterVolumeId == gvId {
+			gvUsed = true
+			break
+		}
+	}
+	if !gvUsed {
+		delete(d.state.GlusterVolumes, gvId)
+	}
+
 	d.saveState()
 
 	return nil
