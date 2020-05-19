@@ -13,23 +13,23 @@ This managed plugin allows you to mount existing glusterfs volumes (or a subdir)
 
 ### Installation
 
-        docker plugin install --alias <pluginAlias> originnexus/glusterfs-plugin SERVERS=... VOLUME_NAME=... OPTIONS=... LOGLEVEL=...
+        docker plugin install --alias <pluginAlias> originnexus/glusterfs-plugin SERVERS=... VOLUME_NAME=... OPTIONS="..." LOGLEVEL=...
     
 Accepted variables are:
 
 - **`SERVERS`**: comma seperated list of gluster servers. If set, `servers` will not be configurable during volume creation.
 - **`VOLUME_NAME`**: Glusterfs volume name to use. If set, `volume-name` will not be configurable during volume creation.
-- **`OPTIONS`**: String of options, most options from [mount.glusterfs] are accepted, plus `dedicated-mount` (see below).
-- **`LOGLEVEL`**: Log level of the plugin. This will also be the default level for Gluster logs. Defaults to `WARNING`.
+- **`OPTIONS`**: string of options (space separated), most options from [mount.glusterfs] are accepted, and also `dedicated-mount` (see below). ex: `log-level=ERROR dedicated-mount`
+- **`LOGLEVEL`**: log level of the plugin. This will also be the default level for Gluster logs if not set via `log-level` option. Defaults to `WARNING`.
     
 ### Volume creation
     docker volume create --driver <pluginAlias>  -o <option>=<value> my-volume
     
-Accepted options are most options from [mount.glusterfs] plus:
+Accepted options are most options from [mount.glusterfs] and also:
 
 - `servers=...`: comma separated list of gluster servers. If `SERVERS` was set at plugin level, this option is not allowed.
 - `volume-name=...`: Glusterfs volume name to use. If `VOLUME_NAME` was set at plugin level, this option is not allowed. The volume must exists on gluster servers, the plugin will not create it.
-- `dedicated-mount`: The driver will reuse an existing mount (same `servers` and `volume-name`) unless this option is set. This allows to use the same Gluster volume with different mount options.
+- `dedicated-mount`: the driver will reuse an existing mount (same `servers` and `volume-name`) unless this option is set. This allows to use the same Gluster volume with different mount options.
 
 If `volume-name` is not set, the plugin will use the name of the docker volume. If set, the plugin will mount a subdir of that gluster volume, creating that subdir if it does not exist.
 
