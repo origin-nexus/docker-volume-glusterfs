@@ -8,24 +8,16 @@ import (
 
 	"github.com/docker/go-plugins-helpers/volume"
 	"github.com/sirupsen/logrus"
+
+	"./glusterfs-driver"
 )
 
 const socketAddress = "/run/docker/plugins/glusterfs.sock"
 
-func newGlusterfsDriver(root string) (*glusterfsDriver, error) {
-	logrus.WithField("method", "new driver").Debug(root)
+func newGlusterfsDriver(root string) (*glusterfsdriver.Driver, error) {
+	logrus.WithField("method", "new glusterfs driver").Debug(root)
 
-	d := &glusterfsDriver{
-		root:       root,
-		statePath:  filepath.Join(root, "glusterfs-state.json"),
-		servers:    os.Getenv("SERVERS"),
-		volumeName: os.Getenv("VOLUME_NAME"),
-		state: State{
-			Volumes:        map[string]*Volume{},
-			GlusterVolumes: map[string]*glusterfsVolume{},
-		},
-	}
-
+	dedicatedMounts := false
 	options := map[string]string{}
 
 	options_str := os.Getenv("OPTIONS")
@@ -39,9 +31,9 @@ func newGlusterfsDriver(root string) (*glusterfsDriver, error) {
 		}
 		switch kv[0] {
 		case "dedicated-mount":
-			d.dedicatedMounts = true
+			dedicatedMounts = true
 		default:
-			if err := d.checkOption(kv[0], kv[1]); err != nil {
+			if err := glusterfsdriver.CheckOption(kv[0], kv[1]); err != nil {
 				return nil, err
 			}
 			options[kv[0]] = kv[1]
@@ -71,10 +63,11 @@ func newGlusterfsDriver(root string) (*glusterfsDriver, error) {
 		return nil, fmt.Errorf("unknown log level '%v'", loglevel)
 	}
 
-	d.loglevel = loglevel
-	d.options = options
+	d := glusterfsdriver.NewDriver(
+		root, filepath.Join(root, "glusterfs-state.json"),
+		os.Getenv("SERVERS"), os.Getenv("VOLUME_NAME"), dedicatedMounts, options)
 
-	if err := d.loadState(); err != nil {
+	if err := d.LoadState(); err != nil {
 		logrus.Error(err)
 	}
 

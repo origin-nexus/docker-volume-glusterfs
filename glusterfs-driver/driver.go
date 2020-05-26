@@ -1,4 +1,4 @@
-package main
+package glusterfsdriver
 
 import (
 	"encoding/json"
@@ -14,23 +14,22 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Volume struct {
+type DockerVolume struct {
 	GlusterVolumeId string
 	Mountpoint      string
 }
 
 type State struct {
-	Volumes        map[string]*Volume
+	DockerVolumes  map[string]*DockerVolume
 	GlusterVolumes map[string]*glusterfsVolume
 }
 
-type glusterfsDriver struct {
+type Driver struct {
 	sync.Mutex
 
 	root      string
 	statePath string
 
-	loglevel        string
 	dedicatedMounts bool
 
 	servers    string
@@ -40,13 +39,31 @@ type glusterfsDriver struct {
 	state State
 }
 
-func (d *glusterfsDriver) Capabilities() *volume.CapabilitiesResponse {
+func NewDriver(root string, statePath string,
+	servers string, volumeName string, dedicatedMounts bool, options map[string]string) *Driver {
+
+	logrus.WithField("method", "new driver").Debug(root)
+	return &Driver{
+		root:            root,
+		statePath:       statePath,
+		servers:         servers,
+		volumeName:      volumeName,
+		dedicatedMounts: dedicatedMounts,
+		options:         options,
+		state: State{
+			DockerVolumes:  map[string]*DockerVolume{},
+			GlusterVolumes: map[string]*glusterfsVolume{},
+		},
+	}
+}
+
+func (d *Driver) Capabilities() *volume.CapabilitiesResponse {
 	logrus.WithField("method", "capabilities").Debugf("")
 
 	return &volume.CapabilitiesResponse{Capabilities: volume.Capability{Scope: "local"}}
 }
 
-func (d *glusterfsDriver) checkOption(key, val string) error {
+func CheckOption(key, val string) error {
 	switch key {
 	case "backup-volfile-server":
 		fallthrough
@@ -62,7 +79,7 @@ func (d *glusterfsDriver) checkOption(key, val string) error {
 	return nil
 }
 
-func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
+func (d *Driver) Create(r *volume.CreateRequest) error {
 	logrus.WithField("method", "create").Debugf("%#v", r)
 
 	d.Lock()
@@ -90,7 +107,7 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 		case "dedicated-mount":
 			dedicatedMount = true
 		default:
-			if err := d.checkOption(key, val); err != nil {
+			if err := CheckOption(key, val); err != nil {
 				return err
 			}
 			if len(d.options) != 0 {
@@ -120,7 +137,7 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 	gv.Mountpoint = filepath.Join(d.root, id)
 	if existingVolume, ok := d.state.GlusterVolumes[id]; ok {
 		var volumes []string
-		for name, v := range d.state.Volumes {
+		for name, v := range d.state.DockerVolumes {
 			if v.GlusterVolumeId == id {
 				volumes = append(volumes, name)
 			}
@@ -139,20 +156,20 @@ func (d *glusterfsDriver) Create(r *volume.CreateRequest) error {
 		mountpoint = filepath.Join(mountpoint, subdirMount)
 	}
 
-	d.state.Volumes[r.Name] = &Volume{GlusterVolumeId: id, Mountpoint: mountpoint}
+	d.state.DockerVolumes[r.Name] = &DockerVolume{GlusterVolumeId: id, Mountpoint: mountpoint}
 	d.state.GlusterVolumes[id] = gv
 	d.saveState()
 
 	return nil
 }
 
-func (d *glusterfsDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
+func (d *Driver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
 	logrus.WithField("method", "get").Debugf("%#v", r)
 
 	d.Lock()
 	defer d.Unlock()
 
-	v, ok := d.state.Volumes[r.Name]
+	v, ok := d.state.DockerVolumes[r.Name]
 	if !ok {
 		return &volume.GetResponse{}, fmt.Errorf("volume %s not found", r.Name)
 	}
@@ -160,26 +177,26 @@ func (d *glusterfsDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error)
 	return &volume.GetResponse{Volume: &volume.Volume{Name: r.Name, Mountpoint: v.Mountpoint}}, nil
 }
 
-func (d *glusterfsDriver) List() (*volume.ListResponse, error) {
+func (d *Driver) List() (*volume.ListResponse, error) {
 	logrus.WithField("method", "list").Debugf("")
 
 	d.Lock()
 	defer d.Unlock()
 
 	var vols []*volume.Volume
-	for name, v := range d.state.Volumes {
+	for name, v := range d.state.DockerVolumes {
 		vols = append(vols, &volume.Volume{Name: name, Mountpoint: v.Mountpoint})
 	}
 	return &volume.ListResponse{Volumes: vols}, nil
 }
 
-func (d *glusterfsDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
+func (d *Driver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
 	logrus.WithField("method", "path").Debugf("%#v", r)
 
 	d.Lock()
 	defer d.Unlock()
 
-	v, ok := d.state.Volumes[r.Name]
+	v, ok := d.state.DockerVolumes[r.Name]
 	if !ok {
 		return &volume.PathResponse{}, fmt.Errorf("volume %s not found", r.Name)
 	}
@@ -187,13 +204,13 @@ func (d *glusterfsDriver) Path(r *volume.PathRequest) (*volume.PathResponse, err
 	return &volume.PathResponse{Mountpoint: v.Mountpoint}, nil
 }
 
-func (d *glusterfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
+func (d *Driver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
 	logrus.WithField("method", "mount").Debugf("%#v", r)
 
 	d.Lock()
 	defer d.Unlock()
 
-	v, ok := d.state.Volumes[r.Name]
+	v, ok := d.state.DockerVolumes[r.Name]
 	if !ok {
 		return &volume.MountResponse{}, fmt.Errorf("volume %s not found", r.Name)
 	}
@@ -255,13 +272,13 @@ func (d *glusterfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, 
 	return &volume.MountResponse{Mountpoint: v.Mountpoint}, nil
 }
 
-func (d *glusterfsDriver) Unmount(r *volume.UnmountRequest) error {
+func (d *Driver) Unmount(r *volume.UnmountRequest) error {
 	logrus.WithField("method", "unmount").Debugf("%#v", r)
 
 	d.Lock()
 	defer d.Unlock()
 
-	v, ok := d.state.Volumes[r.Name]
+	v, ok := d.state.DockerVolumes[r.Name]
 	if !ok {
 		return fmt.Errorf("volume %s not found", r.Name)
 	}
@@ -282,22 +299,22 @@ func (d *glusterfsDriver) Unmount(r *volume.UnmountRequest) error {
 	return nil
 }
 
-func (d *glusterfsDriver) Remove(r *volume.RemoveRequest) error {
+func (d *Driver) Remove(r *volume.RemoveRequest) error {
 	logrus.WithField("method", "remove").Debugf("%#v", r)
 
 	d.Lock()
 	defer d.Unlock()
 
-	v, ok := d.state.Volumes[r.Name]
+	v, ok := d.state.DockerVolumes[r.Name]
 	if !ok {
 		return fmt.Errorf("volume %s not found", r.Name)
 	}
 
 	gvId := v.GlusterVolumeId
-	delete(d.state.Volumes, r.Name)
+	delete(d.state.DockerVolumes, r.Name)
 
 	gvUsed := false
-	for _, v := range d.state.Volumes {
+	for _, v := range d.state.DockerVolumes {
 		if v.GlusterVolumeId == gvId {
 			gvUsed = true
 			break
@@ -311,8 +328,9 @@ func (d *glusterfsDriver) Remove(r *volume.RemoveRequest) error {
 
 	return nil
 }
-func (d *glusterfsDriver) loadState() error {
-	logrus.WithField("method", "loadState").Debugf("loading state from '%v'", d.statePath)
+func (d *Driver) LoadState() error {
+	logrus.WithField("method", "LoadState").Debugf("loading state from '%v'", d.statePath)
+
 	data, err := ioutil.ReadFile(d.statePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -329,7 +347,7 @@ func (d *glusterfsDriver) loadState() error {
 	return nil
 }
 
-func (d *glusterfsDriver) saveState() {
+func (d *Driver) saveState() {
 	logrus.WithField("method", "saveState").Debugf(
 		"saving state %#v to '%v'", d.state, d.statePath)
 	data, err := json.Marshal(d.state)
@@ -342,4 +360,11 @@ func (d *glusterfsDriver) saveState() {
 		logrus.WithField("savestate", d.statePath).Error(err)
 	}
 
+}
+
+func (d *Driver) GetOptions() map[string]string {
+	return d.options
+}
+func (d *Driver) DedicatesMounts() bool {
+	return d.dedicatedMounts
 }

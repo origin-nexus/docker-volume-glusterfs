@@ -1,4 +1,4 @@
-package main
+package glusterfsdriver
 
 import (
 	"io/ioutil"
@@ -13,9 +13,9 @@ import (
 func TestUnsupportedOptions(t *testing.T) {
 	unsupportedOptions := []string{"backup-volfile-server", "backup-volfile-servers", "log-file"}
 
-	d := glusterfsDriver{
+	d := Driver{
 		state: State{
-			Volumes:        map[string]*Volume{},
+			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
@@ -34,10 +34,10 @@ func TestUnsupportedOptions(t *testing.T) {
 }
 
 func TestNoServerOverride(t *testing.T) {
-	d := glusterfsDriver{
+	d := Driver{
 		servers: "server1,server2",
 		state: State{
-			Volumes:        map[string]*Volume{},
+			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
@@ -54,11 +54,11 @@ func TestNoServerOverride(t *testing.T) {
 }
 
 func TestNoVolumeOverride(t *testing.T) {
-	d := glusterfsDriver{
+	d := Driver{
 		servers:    "server1,server2",
 		volumeName: "myvol",
 		state: State{
-			Volumes:        map[string]*Volume{},
+			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
@@ -76,12 +76,12 @@ func TestNoVolumeOverride(t *testing.T) {
 }
 
 func TestSubDirMount(t *testing.T) {
-	d := glusterfsDriver{
+	d := Driver{
 		root:       "/mnt",
 		servers:    "server1,server2",
 		volumeName: "myvol",
 		state: State{
-			Volumes:        map[string]*Volume{},
+			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
@@ -93,7 +93,7 @@ func TestSubDirMount(t *testing.T) {
 		t.Errorf("Unexpected error '%v'", err)
 	}
 
-	volume := d.state.Volumes["test"]
+	volume := d.state.DockerVolumes["test"]
 	gv := d.state.GlusterVolumes[volume.GlusterVolumeId]
 	if volume.Mountpoint != filepath.Join(gv.Mountpoint, "/test") {
 		t.Errorf("Unexpected mount point '%v'", volume.Mountpoint)
@@ -101,11 +101,11 @@ func TestSubDirMount(t *testing.T) {
 }
 
 func TestNoSubDirMount(t *testing.T) {
-	d := glusterfsDriver{
+	d := Driver{
 		root:    "/mnt",
 		servers: "server1,server2",
 		state: State{
-			Volumes:        map[string]*Volume{},
+			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
@@ -117,7 +117,7 @@ func TestNoSubDirMount(t *testing.T) {
 		t.Errorf("Unexpected error '%v'", err)
 	}
 
-	volume := d.state.Volumes["test"]
+	volume := d.state.DockerVolumes["test"]
 	gv := d.state.GlusterVolumes[volume.GlusterVolumeId]
 	if volume.Mountpoint != gv.Mountpoint {
 		t.Errorf("Unexpected mount point '%v'", volume.Mountpoint)
@@ -133,13 +133,13 @@ func TestStateSaveAndLoad(t *testing.T) {
 
 	statePath := filepath.Join(tmpDir, "test-state.json")
 
-	d := glusterfsDriver{
+	d := Driver{
 		root:       tmpDir,
 		statePath:  statePath,
 		servers:    "server1,server2",
 		volumeName: "myvol",
 		state: State{
-			Volumes:        map[string]*Volume{},
+			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
 	}
@@ -154,8 +154,8 @@ func TestStateSaveAndLoad(t *testing.T) {
 
 	d.saveState()
 
-	d2 := glusterfsDriver{statePath: statePath}
-	d2.loadState()
+	d2 := Driver{statePath: statePath}
+	d2.LoadState()
 
 	if !reflect.DeepEqual(d.state, d2.state) {
 		t.Errorf(
