@@ -13,7 +13,7 @@ This managed plugin allows you to mount existing glusterfs volumes (or a subdir)
 
 ### Installation
 
-        docker plugin install --alias <pluginAlias> originnexus/glusterfs-plugin SERVERS=... VOLUME_NAME=... OPTIONS="..." LOGLEVEL=...
+    docker plugin install --alias <pluginAlias> originnexus/glusterfs-plugin SERVERS=... VOLUME_NAME=... OPTIONS="..." LOGLEVEL=...
     
 Accepted variables are:
 
