@@ -39,10 +39,18 @@ type Driver struct {
 	state State
 }
 
-func NewDriver(root string, statePath string,
-	servers string, volumeName string, dedicatedMounts bool, options map[string]string) *Driver {
-
+func NewDriver(root string, statePath string, options map[string]string) *Driver {
 	logrus.WithField("method", "new driver").Debug(root)
+
+	servers, _ := options["servers"]
+	delete(options, "servers")
+
+	volumeName, _ := options["volume-name"]
+	delete(options, "volume-name")
+
+	_, dedicatedMounts := options["dedicated-mount"]
+	delete(options, "dedicated-mount")
+
 	return &Driver{
 		root:            root,
 		statePath:       statePath,
