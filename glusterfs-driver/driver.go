@@ -87,85 +87,117 @@ func CheckOption(key, val string) error {
 	return nil
 }
 
-func (d *Driver) Create(r *volume.CreateRequest) error {
-	logrus.WithField("method", "create").Debugf("%#v", r)
+func (d *Driver) GetOrCreateGlusterVolume(servers string, volumeName string, options map[string]string) (string, error) {
 
-	d.Lock()
-	defer d.Unlock()
 	gv := &glusterfsVolume{
-		Servers:    d.servers,
-		VolumeName: d.volumeName,
+		Servers:    servers,
+		VolumeName: volumeName,
 		Options:    d.options,
 	}
 
 	dedicatedMount := d.dedicatedMounts
 
-	for key, val := range r.Options {
+	for key, val := range options {
 		switch key {
-		case "servers":
-			if d.servers != "" {
-				return fmt.Errorf("'%v' option already set by driver, can not override.", key)
-			}
-			gv.Servers = val
-		case "volume-name":
-			if d.volumeName != "" {
-				return fmt.Errorf("'%v' option already set by driver, can not override.", key)
-			}
-			gv.VolumeName = val
 		case "dedicated-mount":
 			dedicatedMount = true
 		default:
 			if err := CheckOption(key, val); err != nil {
-				return err
+				return "", err
 			}
 			if len(d.options) != 0 {
-				return errors.New("Options already set by driver, can not override.")
+				return "", errors.New("Options already set by driver, can not override.")
 			}
 			gv.Options[key] = val
 		}
 	}
 
 	if gv.Servers == "" {
-		return errors.New("'servers' option required")
-	}
-
-	subdirMount := ""
-	if gv.VolumeName == "" {
-		gv.VolumeName = r.Name
-	} else {
-		subdirMount = r.Name
+		return "", errors.New("'servers' option required")
 	}
 
 	id := ""
 	if dedicatedMount {
-		id = filepath.Join("_dedicated", r.Name)
+		i := 1
+		for {
+			id = filepath.Join("_dedicated", gv.Servers, gv.VolumeName, string(i))
+			if _, exists := d.state.GlusterVolumes[id]; !exists {
+				break
+			}
+			i++
+		}
 	} else {
 		id = filepath.Join(gv.Servers, gv.VolumeName)
 	}
 	gv.Mountpoint = filepath.Join(d.root, id)
 	if existingVolume, ok := d.state.GlusterVolumes[id]; ok {
-		var volumes []string
-		for name, v := range d.state.DockerVolumes {
-			if v.GlusterVolumeId == id {
-				volumes = append(volumes, name)
-			}
-		}
 		if !reflect.DeepEqual(gv.Options, existingVolume.Options) {
-			return fmt.Errorf(
+			var volumes []string
+			for name, v := range d.state.DockerVolumes {
+				if v.GlusterVolumeId == id {
+					volumes = append(volumes, name)
+				}
+			}
+			return "", fmt.Errorf(
 				"%#v options differ from already created volumes %#v with options %#v"+
 					" use 'dedicated-mount' option to not reuse existing mounts.",
 				gv.Options, volumes, existingVolume.Options)
 		}
 		gv = existingVolume
+	} else {
+		d.state.GlusterVolumes[id] = gv
 	}
-	mountpoint := gv.Mountpoint
 
+	return id, nil
+}
+
+func (d *Driver) Create(r *volume.CreateRequest) error {
+	logrus.WithField("method", "create").Debugf("%#v", r)
+
+	d.Lock()
+	defer d.Unlock()
+
+	servers := d.servers
+	volumeName := d.volumeName
+
+	if servers == "" {
+		servers = r.Options["servers"]
+		delete(r.Options, "servers")
+	} else if _, exists := r.Options["servers"]; exists {
+		return errors.New("'servers' option already set by driver, can not override.")
+	}
+
+	if servers == "" {
+		return errors.New("'servers' option required")
+	}
+
+	if volumeName == "" {
+		volumeName = r.Options["volume-name"]
+		delete(r.Options, "volume-name")
+	} else if _, exists := r.Options["volume-name"]; exists {
+		return errors.New("'volume-name' option already set by driver, can not override.")
+	}
+
+	subdirMount := ""
+	if volumeName == "" {
+		volumeName = r.Name
+	} else {
+		subdirMount = r.Name
+	}
+
+	id, err := d.GetOrCreateGlusterVolume(servers, volumeName, r.Options)
+	if err != nil {
+		return err
+	}
+	gv := d.state.GlusterVolumes[id]
+
+	mountpoint := gv.Mountpoint
 	if subdirMount != "" {
 		mountpoint = filepath.Join(mountpoint, subdirMount)
 	}
 
 	d.state.DockerVolumes[r.Name] = &DockerVolume{GlusterVolumeId: id, Mountpoint: mountpoint}
-	d.state.GlusterVolumes[id] = gv
+
 	d.saveState()
 
 	return nil
