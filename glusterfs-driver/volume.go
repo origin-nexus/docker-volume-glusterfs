@@ -1,9 +1,11 @@
 package glusterfsdriver
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"os/exec"
+	"os"
+	"strings"
 )
 
 type glusterfsVolume struct {
@@ -11,45 +13,76 @@ type glusterfsVolume struct {
 	VolumeName string
 	Options    map[string]string
 
-	Mountpoint  string
-	connections int
+	Mountpoint string
+	mounted    bool
+
+	executeCommand func(string, ...string) ([]byte, error)
 }
 
-func (gv *glusterfsVolume) mount() error {
-	cmd := gv.getMountCmd()
-	logrus.Debug(cmd.Args)
+func (gv *glusterfsVolume) Mount() error {
+	if gv.isMounted() {
+		return nil
+	}
 
-	output, err := cmd.CombinedOutput()
+	args := gv.getMountArgs()
+	logrus.Debug(args)
+
+	output, err := gv.executeCommand("mount", args...)
 	if err != nil {
 		return fmt.Errorf("mount command execute failed: %v (%s)", err, output)
 	}
+	gv.mounted = true
 	return nil
 }
 
-func (gv *glusterfsVolume) getMountCmd() *exec.Cmd {
+func (gv *glusterfsVolume) getMountArgs() []string {
 	volumefile := fmt.Sprintf("%v:/%v", gv.Servers, gv.VolumeName)
-	cmd := exec.Command(
-		"mount", "-t", "glusterfs", volumefile, gv.Mountpoint,
-		"-o", "log-file=/run/docker/plugins/init-stdout")
+	args := []string{
+		"-t", "glusterfs", volumefile, gv.Mountpoint,
+		"-o", "log-file=/run/docker/plugins/init-stdout"}
 
 	for key, val := range gv.Options {
 		if val != "" {
-			cmd.Args = append(cmd.Args, "-o", key+"="+val)
+			args = append(args, "-o", key+"="+val)
 		} else {
-			cmd.Args = append(cmd.Args, "-o", key)
+			args = append(args, "-o", key)
 		}
 	}
 
-	return cmd
+	return args
 }
 
-func (gv *glusterfsVolume) unmount() error {
-	cmd := exec.Command("umount", gv.Mountpoint)
-	logrus.Debug(cmd.Args)
+func (gv *glusterfsVolume) Unmount() error {
+	if !gv.isMounted() {
+		logrus.Debugf("'%v' not mounted, so not unmounting", gv.VolumeName)
+		return nil
+	}
 
-	output, err := cmd.CombinedOutput()
+	output, err := gv.executeCommand("umount", gv.Mountpoint)
 	if err != nil {
 		return fmt.Errorf("umount command execute failed: %v (%s)", err, output)
 	}
+	gv.mounted = false
 	return nil
+}
+
+func (gv *glusterfsVolume) isMounted() bool {
+	if !gv.mounted {
+		// check if already mounted
+		f, err := os.Open("/proc/mounts")
+		if err != nil {
+			logrus.Errorf("Failed to open '/proc/mounts': %v", err)
+			return gv.mounted
+		}
+		defer f.Close()
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			mount := strings.Split(scanner.Text(), " ")
+			if mount[1] == gv.Mountpoint {
+				gv.mounted = true
+				break
+			}
+		}
+	}
+	return gv.mounted
 }

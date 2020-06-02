@@ -35,7 +35,9 @@ func TestUnsupportedOptions(t *testing.T) {
 
 func TestNoServerOverride(t *testing.T) {
 	d := Driver{
-		servers: "server1,server2",
+		config: Config{
+			servers: "server1,server2",
+		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
@@ -55,8 +57,10 @@ func TestNoServerOverride(t *testing.T) {
 
 func TestNoVolumeOverride(t *testing.T) {
 	d := Driver{
-		servers:    "server1,server2",
-		volumeName: "myvol",
+		config: Config{
+			servers:    "server1,server2",
+			volumeName: "myvol",
+		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
@@ -75,15 +79,38 @@ func TestNoVolumeOverride(t *testing.T) {
 	}
 }
 
+type executor struct {
+	cmd  string
+	args []string
+}
+
+func (e *executor) exec(cmd string, args ...string) ([]byte, error) {
+	e.cmd = cmd
+	e.args = args
+
+	return []byte{}, nil
+}
+
 func TestSubDirMount(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "glusterfs-plugin-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	e := executor{}
+
 	d := Driver{
-		root:       "/mnt",
-		servers:    "server1,server2",
-		volumeName: "myvol",
+		config: Config{
+			root:       tmpDir,
+			servers:    "server1,server2",
+			volumeName: "myvol",
+		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
+		executeCommand: e.exec,
 	}
 	r := &volume.CreateRequest{
 		Name: "test",
@@ -91,6 +118,10 @@ func TestSubDirMount(t *testing.T) {
 
 	if err := d.Create(r); err != nil {
 		t.Errorf("Unexpected error '%v'", err)
+		return
+	}
+	if e.cmd != "mount" {
+		t.Errorf("Unexpected command '%v'", e.cmd)
 	}
 
 	volume := d.state.DockerVolumes["test"]
@@ -101,13 +132,24 @@ func TestSubDirMount(t *testing.T) {
 }
 
 func TestNoSubDirMount(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "glusterfs-plugin-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	e := executor{}
+
 	d := Driver{
-		root:    "/mnt",
-		servers: "server1,server2",
+		config: Config{
+			root:    tmpDir,
+			servers: "server1,server2",
+		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
+		executeCommand: e.exec,
 	}
 	r := &volume.CreateRequest{
 		Name: "test",
@@ -115,6 +157,7 @@ func TestNoSubDirMount(t *testing.T) {
 
 	if err := d.Create(r); err != nil {
 		t.Errorf("Unexpected error '%v'", err)
+		return
 	}
 
 	volume := d.state.DockerVolumes["test"]
@@ -133,15 +176,20 @@ func TestStateSaveAndLoad(t *testing.T) {
 
 	statePath := filepath.Join(tmpDir, "test-state.json")
 
+	e := executor{}
+
 	d := Driver{
-		root:       tmpDir,
-		statePath:  statePath,
-		servers:    "server1,server2",
-		volumeName: "myvol",
+		config: Config{
+			root:       tmpDir,
+			statePath:  statePath,
+			servers:    "server1,server2",
+			volumeName: "myvol",
+		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
+		executeCommand: e.exec,
 	}
 
 	r := &volume.CreateRequest{
@@ -150,16 +198,31 @@ func TestStateSaveAndLoad(t *testing.T) {
 
 	if err := d.Create(r); err != nil {
 		t.Errorf("Unexpected error '%v'", err)
+		return
 	}
 
 	d.saveState()
 
-	d2 := Driver{statePath: statePath}
+	d2 := Driver{config: Config{statePath: statePath}, executeCommand: e.exec}
 	d2.LoadState()
+
+	for _, gv := range d2.state.GlusterVolumes {
+		if gv.executeCommand == nil {
+			t.Error("executeCommand on glusterfsVolume has not been provisionned when loading state")
+		}
+	}
+
+	// same function do not compare well using DeepEqual
+	for id, _ := range d.state.GlusterVolumes {
+		d.state.GlusterVolumes[id].executeCommand = nil
+		d2.state.GlusterVolumes[id].executeCommand = nil
+	}
+
+	// ignore mounted
+	d2.state.GlusterVolumes["server1,server2/myvol"].mounted = true
 
 	if !reflect.DeepEqual(d.state, d2.state) {
 		t.Errorf(
-			"Loaded state '%#v' differs from original state '%#v'",
-			d2.state, d.state)
+			"Loaded state\n%#v\n differs from original state\n%#v", d2.state, d.state)
 	}
 }

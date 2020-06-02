@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestGetMountCmd(t *testing.T) {
+func TestGetMountArgs(t *testing.T) {
 	cases := []struct {
 		gv   glusterfsVolume
 		args []string
@@ -16,7 +16,7 @@ func TestGetMountCmd(t *testing.T) {
 				VolumeName: "volume",
 				Mountpoint: "/mnt",
 			},
-			[]string{"mount", "-t", "glusterfs", "server1:/volume", "/mnt",
+			[]string{"-t", "glusterfs", "server1:/volume", "/mnt",
 				"-o", "log-file=/run/docker/plugins/init-stdout"},
 		},
 		{
@@ -28,7 +28,7 @@ func TestGetMountCmd(t *testing.T) {
 					"option1": "",
 				},
 			},
-			[]string{"mount", "-t", "glusterfs", "server1:/volume", "/mnt",
+			[]string{"-t", "glusterfs", "server1:/volume", "/mnt",
 				"-o", "log-file=/run/docker/plugins/init-stdout", "-o", "option1"},
 		},
 		{
@@ -40,16 +40,16 @@ func TestGetMountCmd(t *testing.T) {
 					"option": "value",
 				},
 			},
-			[]string{"mount", "-t", "glusterfs", "server1:/volume", "/mnt",
+			[]string{"-t", "glusterfs", "server1:/volume", "/mnt",
 				"-o", "log-file=/run/docker/plugins/init-stdout", "-o", "option=value"},
 		},
 	}
 
 	for _, c := range cases {
-		if !reflect.DeepEqual(c.gv.getMountCmd().Args, c.args) {
+		if !reflect.DeepEqual(c.gv.getMountArgs(), c.args) {
 			t.Errorf(
 				"incorrect command args\n %v\n expected\n %v",
-				c.gv.getMountCmd().Args, c.args)
+				c.gv.getMountArgs(), c.args)
 		}
 	}
 }

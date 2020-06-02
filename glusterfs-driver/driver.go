@@ -24,9 +24,7 @@ type State struct {
 	GlusterVolumes map[string]*glusterfsVolume
 }
 
-type Driver struct {
-	sync.Mutex
-
+type Config struct {
 	root      string
 	statePath string
 
@@ -35,12 +33,20 @@ type Driver struct {
 	servers    string
 	volumeName string
 	options    map[string]string
-
-	state State
 }
 
-func NewDriver(root string, statePath string, options map[string]string) *Driver {
-	logrus.WithField("method", "new driver").Debug(root)
+type Driver struct {
+	sync.Mutex
+
+	config Config
+	state  State
+
+	executeCommand func(string, ...string) ([]byte, error)
+}
+
+func NewConfig(root string, statePath string, options map[string]string) Config {
+
+	logrus.WithField("method", "NewConfig").Debug(root)
 
 	servers, _ := options["servers"]
 	delete(options, "servers")
@@ -51,17 +57,28 @@ func NewDriver(root string, statePath string, options map[string]string) *Driver
 	_, dedicatedMounts := options["dedicated-mount"]
 	delete(options, "dedicated-mount")
 
-	return &Driver{
+	return Config{
 		root:            root,
 		statePath:       statePath,
 		servers:         servers,
 		volumeName:      volumeName,
 		dedicatedMounts: dedicatedMounts,
 		options:         options,
+	}
+}
+
+func NewDriver(config Config,
+	executeCommand func(string, ...string) ([]byte, error)) *Driver {
+
+	logrus.WithField("method", "new driver").Debug(config)
+
+	return &Driver{
+		config: config,
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
 			GlusterVolumes: map[string]*glusterfsVolume{},
 		},
+		executeCommand: executeCommand,
 	}
 }
 
@@ -88,14 +105,14 @@ func CheckOption(key, val string) error {
 }
 
 func (d *Driver) GetOrCreateGlusterVolume(servers string, volumeName string, options map[string]string) (string, error) {
-
 	gv := &glusterfsVolume{
-		Servers:    servers,
-		VolumeName: volumeName,
-		Options:    d.options,
+		Servers:        servers,
+		VolumeName:     volumeName,
+		Options:        d.config.options,
+		executeCommand: d.executeCommand,
 	}
 
-	dedicatedMount := d.dedicatedMounts
+	dedicatedMount := d.config.dedicatedMounts
 
 	for key, val := range options {
 		switch key {
@@ -105,7 +122,7 @@ func (d *Driver) GetOrCreateGlusterVolume(servers string, volumeName string, opt
 			if err := CheckOption(key, val); err != nil {
 				return "", err
 			}
-			if len(d.options) != 0 {
+			if len(d.config.options) != 0 {
 				return "", errors.New("Options already set by driver, can not override.")
 			}
 			gv.Options[key] = val
@@ -129,7 +146,7 @@ func (d *Driver) GetOrCreateGlusterVolume(servers string, volumeName string, opt
 	} else {
 		id = filepath.Join(gv.Servers, gv.VolumeName)
 	}
-	gv.Mountpoint = filepath.Join(d.root, id)
+	gv.Mountpoint = filepath.Join(d.config.root, id)
 	if existingVolume, ok := d.state.GlusterVolumes[id]; ok {
 		if !reflect.DeepEqual(gv.Options, existingVolume.Options) {
 			var volumes []string
@@ -157,8 +174,8 @@ func (d *Driver) Create(r *volume.CreateRequest) error {
 	d.Lock()
 	defer d.Unlock()
 
-	servers := d.servers
-	volumeName := d.volumeName
+	servers := d.config.servers
+	volumeName := d.config.volumeName
 
 	if servers == "" {
 		servers = r.Options["servers"]
@@ -189,16 +206,50 @@ func (d *Driver) Create(r *volume.CreateRequest) error {
 	if err != nil {
 		return err
 	}
+
+	defer d.saveState()
+	defer d.deleteUnused(id)
+
 	gv := d.state.GlusterVolumes[id]
+
+	fi, err := os.Lstat(gv.Mountpoint)
+	// Create subdirectory if required
+	if os.IsNotExist(err) {
+		if err := os.MkdirAll(gv.Mountpoint, 0755); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	if fi != nil && !fi.IsDir() {
+		return fmt.Errorf("%v already exist and it's not a directory", gv.Mountpoint)
+	}
+
+	if err := gv.Mount(); err != nil {
+		return err
+	}
 
 	mountpoint := gv.Mountpoint
 	if subdirMount != "" {
 		mountpoint = filepath.Join(mountpoint, subdirMount)
+		// Create subdirectory if required
+		fi, err := os.Lstat(mountpoint)
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(mountpoint, 0755); err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+
+		if fi != nil && !fi.IsDir() {
+			return fmt.Errorf("'%v' already exist in '%v' volume and it's not a directory",
+				subdirMount, gv.VolumeName)
+		}
 	}
 
 	d.state.DockerVolumes[r.Name] = &DockerVolume{GlusterVolumeId: id, Mountpoint: mountpoint}
-
-	d.saveState()
 
 	return nil
 }
@@ -247,67 +298,13 @@ func (d *Driver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
 func (d *Driver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
 	logrus.WithField("method", "mount").Debugf("%#v", r)
 
-	d.Lock()
-	defer d.Unlock()
-
 	v, ok := d.state.DockerVolumes[r.Name]
 	if !ok {
 		return &volume.MountResponse{}, fmt.Errorf("volume %s not found", r.Name)
 	}
 	logrus.WithField("method", "mount").Debugf("found volume %#v", v)
 
-	gv := d.state.GlusterVolumes[v.GlusterVolumeId]
-
-	logrus.WithField("method", "mount").Debugf("found gluster volume %#v", gv)
-
-	if gv.connections == 0 {
-		fi, err := os.Lstat(gv.Mountpoint)
-		if os.IsNotExist(err) {
-			if err := os.MkdirAll(gv.Mountpoint, 0755); err != nil {
-				return &volume.MountResponse{}, err
-			}
-		} else if err != nil {
-			return &volume.MountResponse{}, err
-		}
-
-		if fi != nil && !fi.IsDir() {
-			return &volume.MountResponse{},
-				fmt.Errorf("%v already exist and it's not a directory", gv.Mountpoint)
-		}
-
-		if err := gv.mount(); err != nil {
-			return &volume.MountResponse{}, err
-		}
-	}
-
-	// Create subdirectory if required
-	if v.Mountpoint != gv.Mountpoint {
-		fi, err := os.Lstat(v.Mountpoint)
-		if os.IsNotExist(err) {
-			if err := os.MkdirAll(v.Mountpoint, 0755); err != nil {
-				if gv.connections == 0 {
-					gv.unmount()
-				}
-				return &volume.MountResponse{}, err
-			}
-		} else if err != nil {
-			if gv.connections == 0 {
-				gv.unmount()
-			}
-			return &volume.MountResponse{}, err
-		}
-
-		if fi != nil && !fi.IsDir() {
-			if gv.connections == 0 {
-				gv.unmount()
-			}
-			return &volume.MountResponse{},
-				fmt.Errorf("%v already exist and it's not a directory", v.Mountpoint)
-		}
-	}
-
-	gv.connections++
-	d.saveState()
+	d.state.GlusterVolumes[v.GlusterVolumeId].Mount()
 
 	return &volume.MountResponse{Mountpoint: v.Mountpoint}, nil
 }
@@ -315,25 +312,8 @@ func (d *Driver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
 func (d *Driver) Unmount(r *volume.UnmountRequest) error {
 	logrus.WithField("method", "unmount").Debugf("%#v", r)
 
-	d.Lock()
-	defer d.Unlock()
-
-	v, ok := d.state.DockerVolumes[r.Name]
-	if !ok {
+	if _, ok := d.state.DockerVolumes[r.Name]; !ok {
 		return fmt.Errorf("volume %s not found", r.Name)
-	}
-
-	gv := d.state.GlusterVolumes[v.GlusterVolumeId]
-
-	if gv.connections > 0 {
-		gv.connections--
-		d.saveState()
-	}
-
-	if gv.connections == 0 {
-		if err := gv.unmount(); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -353,6 +333,16 @@ func (d *Driver) Remove(r *volume.RemoveRequest) error {
 	gvId := v.GlusterVolumeId
 	delete(d.state.DockerVolumes, r.Name)
 
+	if err := d.deleteUnused(gvId); err != nil {
+		return err
+	}
+
+	d.saveState()
+
+	return nil
+}
+
+func (d *Driver) deleteUnused(gvId string) error {
 	gvUsed := false
 	for _, v := range d.state.DockerVolumes {
 		if v.GlusterVolumeId == gvId {
@@ -361,20 +351,23 @@ func (d *Driver) Remove(r *volume.RemoveRequest) error {
 		}
 	}
 	if !gvUsed {
+		gv := d.state.GlusterVolumes[gvId]
+		if err := gv.Unmount(); err != nil {
+			return err
+		}
 		delete(d.state.GlusterVolumes, gvId)
 	}
 
-	d.saveState()
-
 	return nil
 }
-func (d *Driver) LoadState() error {
-	logrus.WithField("method", "LoadState").Debugf("loading state from '%v'", d.statePath)
 
-	data, err := ioutil.ReadFile(d.statePath)
+func (d *Driver) LoadState() error {
+	logrus.WithField("method", "LoadState").Debugf("loading state from '%v'", d.config.statePath)
+
+	data, err := ioutil.ReadFile(d.config.statePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logrus.WithField("statePath", d.statePath).Debug("no state found")
+			logrus.WithField("statePath", d.config.statePath).Debug("no state found")
 		} else {
 			return err
 		}
@@ -384,27 +377,31 @@ func (d *Driver) LoadState() error {
 		}
 	}
 
+	for _, gv := range d.state.GlusterVolumes {
+		gv.executeCommand = d.executeCommand
+	}
+
 	return nil
 }
 
 func (d *Driver) saveState() {
 	logrus.WithField("method", "saveState").Debugf(
-		"saving state %#v to '%v'", d.state, d.statePath)
+		"saving state %#v to '%v'", d.state, d.config.statePath)
 	data, err := json.Marshal(d.state)
 	if err != nil {
-		logrus.WithField("statePath", d.statePath).Error(err)
+		logrus.WithField("statePath", d.config.statePath).Error(err)
 		return
 	}
 
-	if err := ioutil.WriteFile(d.statePath, data, 0644); err != nil {
-		logrus.WithField("savestate", d.statePath).Error(err)
+	if err := ioutil.WriteFile(d.config.statePath, data, 0644); err != nil {
+		logrus.WithField("savestate", d.config.statePath).Error(err)
 	}
 
 }
 
 func (d *Driver) GetOptions() map[string]string {
-	return d.options
+	return d.config.options
 }
 func (d *Driver) DedicatesMounts() bool {
-	return d.dedicatedMounts
+	return d.config.dedicatedMounts
 }

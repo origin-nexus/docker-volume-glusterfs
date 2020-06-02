@@ -3,13 +3,14 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/docker/go-plugins-helpers/volume"
 	"github.com/sirupsen/logrus"
 
-	"./glusterfs-driver"
+	"github.com/origin-nexus/docker-volume-glusterfs/glusterfs-driver"
 )
 
 const socketAddress = "/run/docker/plugins/glusterfs.sock"
@@ -63,8 +64,9 @@ func newGlusterfsDriver(root string) (*glusterfsdriver.Driver, error) {
 	options["servers"] = os.Getenv("SERVERS")
 	options["volume-name"] = os.Getenv("VOLUME_NAME")
 
-	d := glusterfsdriver.NewDriver(
-		root, filepath.Join(root, "glusterfs-state.json"), options)
+	config := glusterfsdriver.NewConfig(root, filepath.Join(root, "glusterfs-state.json"), options)
+
+	d := glusterfsdriver.NewDriver(config, executeCommand)
 
 	if err := d.LoadState(); err != nil {
 		logrus.Error(err)
@@ -81,4 +83,8 @@ func main() {
 	h := volume.NewHandler(d)
 	logrus.Infof("listening on %s", socketAddress)
 	logrus.Error(h.ServeUnix(socketAddress, 0))
+}
+
+func executeCommand(cmd string, args ...string) ([]byte, error) {
+	return exec.Command(cmd, args...).CombinedOutput()
 }
