@@ -24,11 +24,14 @@ func (gv *glusterfsVolume) Mount() error {
 		return nil
 	}
 
+	if err := gv.createMountpoint(); err != nil {
+		return fmt.Errorf("error creating mount point: %v)", err)
+	}
+
 	args := gv.getMountArgs()
 	logrus.Debug(args)
 
-	output, err := gv.executeCommand("mount", args...)
-	if err != nil {
+	if output, err := gv.executeCommand("mount", args...); err != nil {
 		return fmt.Errorf("mount command execute failed: %v (%s)", err, output)
 	}
 	gv.mounted = true
@@ -84,5 +87,23 @@ func (gv *glusterfsVolume) isMounted() bool {
 			}
 		}
 	}
+
 	return gv.mounted
+}
+func (gv *glusterfsVolume) createMountpoint() error {
+	fi, err := os.Lstat(gv.Mountpoint)
+
+	if os.IsNotExist(err) {
+		if err := os.MkdirAll(gv.Mountpoint, 0755); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	if fi != nil && !fi.IsDir() {
+		return fmt.Errorf("%v already exist and it's not a directory", gv.Mountpoint)
+	}
+
+	return nil
 }

@@ -212,20 +212,6 @@ func (d *Driver) Create(r *volume.CreateRequest) error {
 
 	gv := d.state.GlusterVolumes[id]
 
-	fi, err := os.Lstat(gv.Mountpoint)
-	// Create subdirectory if required
-	if os.IsNotExist(err) {
-		if err := os.MkdirAll(gv.Mountpoint, 0755); err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-
-	if fi != nil && !fi.IsDir() {
-		return fmt.Errorf("%v already exist and it's not a directory", gv.Mountpoint)
-	}
-
 	if err := gv.Mount(); err != nil {
 		return err
 	}
