@@ -1,7 +1,9 @@
 FROM golang:latest AS builder
-COPY . /go/src/docker-volume-glusterfs
-WORKDIR /go/src/docker-volume-glusterfs
-RUN  go get .
+COPY glusterfs-volume /go/src/docker-volume-glusterfs/glusterfs-volume/
+COPY glusterfs-plugin /go/src/docker-volume-glusterfs/glusterfs-plugin/
+COPY go.mod go.sum /go/src/docker-volume-glusterfs/
+WORKDIR /go/src/docker-volume-glusterfs/glusterfs-plugin
+RUN  go get -v .
 RUN  go build
    
 FROM ubuntu:latest
@@ -12,8 +14,8 @@ RUN apt update && \
     apt remove -y --purge software-properties-common && \
     apt autoremove -y && \
     rm -rf /var/lib/apt/lists/*
-COPY --from=builder /go/src/docker-volume-glusterfs/docker-volume-glusterfs /
 ADD https://github.com/krallin/tini/releases/download/v0.18.0/tini /tini
+COPY --from=builder /go/src/docker-volume-glusterfs/glusterfs-plugin/glusterfs-plugin /
 RUN chmod +x /tini
 
-CMD ["/tini", "--", "docker-volume-glusterfs"]
+CMD ["/tini", "--", "glusterfs-plugin"]

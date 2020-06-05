@@ -3,7 +3,7 @@
     "entrypoint": [
         "/tini",
         "--",
-        "/docker-volume-glusterfs"
+        "/glusterfs-plugin"
     ],
     "env": [
         {

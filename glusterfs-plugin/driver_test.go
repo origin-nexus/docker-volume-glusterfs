@@ -1,4 +1,4 @@
-package glusterfsdriver
+package main
 
 import (
 	"io/ioutil"
@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/docker/go-plugins-helpers/volume"
+
+	"github.com/origin-nexus/docker-volume-glusterfs/glusterfs-volume"
 )
 
 func TestUnsupportedOptions(t *testing.T) {
@@ -16,7 +18,7 @@ func TestUnsupportedOptions(t *testing.T) {
 	d := Driver{
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsVolume{},
+			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
 		},
 	}
 	for _, option := range unsupportedOptions {
@@ -35,12 +37,12 @@ func TestUnsupportedOptions(t *testing.T) {
 
 func TestNoServerOverride(t *testing.T) {
 	d := Driver{
-		config: Config{
-			servers: "server1,server2",
+		glusterConfig: glusterfsvolume.Config{
+			Servers: "server1,server2",
 		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsVolume{},
+			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
 		},
 	}
 	r := &volume.CreateRequest{
@@ -57,13 +59,13 @@ func TestNoServerOverride(t *testing.T) {
 
 func TestNoVolumeOverride(t *testing.T) {
 	d := Driver{
-		config: Config{
-			servers:    "server1,server2",
-			volumeName: "myvol",
+		glusterConfig: glusterfsvolume.Config{
+			Servers:    "server1,server2",
+			VolumeName: "myvol",
 		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsVolume{},
+			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
 		},
 	}
 	r := &volume.CreateRequest{
@@ -99,18 +101,18 @@ func TestSubDirMount(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	e := executor{}
+	glusterfsvolume.ExecuteCommand = e.exec
 
 	d := Driver{
-		config: Config{
-			root:       tmpDir,
-			servers:    "server1,server2",
-			volumeName: "myvol",
+		root: tmpDir,
+		glusterConfig: glusterfsvolume.Config{
+			Servers:    "server1,server2",
+			VolumeName: "myvol",
 		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsVolume{},
+			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
 		},
-		executeCommand: e.exec,
 	}
 	r := &volume.CreateRequest{
 		Name: "test",
@@ -138,18 +140,15 @@ func TestNoSubDirMount(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	e := executor{}
-
 	d := Driver{
-		config: Config{
-			root:    tmpDir,
-			servers: "server1,server2",
+		root: tmpDir,
+		glusterConfig: glusterfsvolume.Config{
+			Servers: "server1,server2",
 		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsVolume{},
+			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
 		},
-		executeCommand: e.exec,
 	}
 	r := &volume.CreateRequest{
 		Name: "test",
@@ -176,20 +175,17 @@ func TestStateSaveAndLoad(t *testing.T) {
 
 	statePath := filepath.Join(tmpDir, "test-state.json")
 
-	e := executor{}
-
 	d := Driver{
-		config: Config{
-			root:       tmpDir,
-			statePath:  statePath,
-			servers:    "server1,server2",
-			volumeName: "myvol",
+		root:      tmpDir,
+		statePath: statePath,
+		glusterConfig: glusterfsvolume.Config{
+			Servers:    "server1,server2",
+			VolumeName: "myvol",
 		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsVolume{},
+			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
 		},
-		executeCommand: e.exec,
 	}
 
 	r := &volume.CreateRequest{
@@ -201,25 +197,15 @@ func TestStateSaveAndLoad(t *testing.T) {
 		return
 	}
 
+	// unmount volumes so that states can be compared after load (mount not exported)
+	for _, gv := range d.state.GlusterVolumes {
+		gv.Unmount()
+	}
+
 	d.saveState()
 
-	d2 := Driver{config: Config{statePath: statePath}, executeCommand: e.exec}
+	d2 := Driver{statePath: statePath}
 	d2.LoadState()
-
-	for _, gv := range d2.state.GlusterVolumes {
-		if gv.executeCommand == nil {
-			t.Error("executeCommand on glusterfsVolume has not been provisionned when loading state")
-		}
-	}
-
-	// same function do not compare well using DeepEqual
-	for id, _ := range d.state.GlusterVolumes {
-		d.state.GlusterVolumes[id].executeCommand = nil
-		d2.state.GlusterVolumes[id].executeCommand = nil
-	}
-
-	// ignore mounted
-	d2.state.GlusterVolumes["server1,server2/myvol"].mounted = true
 
 	if !reflect.DeepEqual(d.state, d2.state) {
 		t.Errorf(

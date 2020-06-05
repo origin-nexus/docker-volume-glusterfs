@@ -1,25 +1,28 @@
-package glusterfsdriver
+package glusterfsvolume
 
 import (
 	"bufio"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"os"
+	"os/exec"
 	"strings"
 )
 
-type glusterfsVolume struct {
+type Volume struct {
 	Servers    string
 	VolumeName string
 	Options    map[string]string
 
 	Mountpoint string
 	mounted    bool
-
-	executeCommand func(string, ...string) ([]byte, error)
 }
 
-func (gv *glusterfsVolume) Mount() error {
+var ExecuteCommand = func(cmd string, args ...string) ([]byte, error) {
+	return exec.Command(cmd, args...).CombinedOutput()
+}
+
+func (gv *Volume) Mount() error {
 	if gv.isMounted() {
 		return nil
 	}
@@ -31,14 +34,14 @@ func (gv *glusterfsVolume) Mount() error {
 	args := gv.getMountArgs()
 	logrus.Debug(args)
 
-	if output, err := gv.executeCommand("mount", args...); err != nil {
+	if output, err := ExecuteCommand("mount", args...); err != nil {
 		return fmt.Errorf("mount command execute failed: %v (%s)", err, output)
 	}
 	gv.mounted = true
 	return nil
 }
 
-func (gv *glusterfsVolume) getMountArgs() []string {
+func (gv *Volume) getMountArgs() []string {
 	volumefile := fmt.Sprintf("%v:/%v", gv.Servers, gv.VolumeName)
 	args := []string{
 		"-t", "glusterfs", volumefile, gv.Mountpoint,
@@ -55,13 +58,13 @@ func (gv *glusterfsVolume) getMountArgs() []string {
 	return args
 }
 
-func (gv *glusterfsVolume) Unmount() error {
+func (gv *Volume) Unmount() error {
 	if !gv.isMounted() {
 		logrus.Debugf("'%v' not mounted, so not unmounting", gv.VolumeName)
 		return nil
 	}
 
-	output, err := gv.executeCommand("umount", gv.Mountpoint)
+	output, err := ExecuteCommand("umount", gv.Mountpoint)
 	if err != nil {
 		return fmt.Errorf("umount command execute failed: %v (%s)", err, output)
 	}
@@ -69,7 +72,7 @@ func (gv *glusterfsVolume) Unmount() error {
 	return nil
 }
 
-func (gv *glusterfsVolume) isMounted() bool {
+func (gv *Volume) isMounted() bool {
 	if !gv.mounted {
 		// check if already mounted
 		f, err := os.Open("/proc/mounts")
@@ -90,7 +93,7 @@ func (gv *glusterfsVolume) isMounted() bool {
 
 	return gv.mounted
 }
-func (gv *glusterfsVolume) createMountpoint() error {
+func (gv *Volume) createMountpoint() error {
 	fi, err := os.Lstat(gv.Mountpoint)
 
 	if os.IsNotExist(err) {

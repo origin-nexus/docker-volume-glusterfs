@@ -8,19 +8,19 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func TestNewGlusterfsDriverUnknownLoglevel(t *testing.T) {
+func TestNewDriverUnknownLoglevel(t *testing.T) {
 	root := "/myroot"
 	os.Setenv("LOGLEVEL", "UNKONW")
-	_, err := newGlusterfsDriver(root)
+	_, err := NewDriver(root)
 
 	if err == nil {
 		t.Error("Unknown LOGLEVEL should return error")
 	}
 }
-func TestNewGlusterfsDriverDefaultLoglevel(t *testing.T) {
+func TestNewDriverDefaultLoglevel(t *testing.T) {
 	root := "/myroot"
 	os.Setenv("LOGLEVEL", "")
-	_, err := newGlusterfsDriver(root)
+	_, err := NewDriver(root)
 
 	if err != nil {
 		t.Error("LOGLEVEL '' should not return error")
@@ -32,7 +32,7 @@ func TestNewGlusterfsDriverDefaultLoglevel(t *testing.T) {
 	}
 }
 
-func TestNewGlusterfsDriverLogruslevel(t *testing.T) {
+func TestNewDriverLogruslevel(t *testing.T) {
 	cases := []struct {
 		envLevel    string
 		logrusLevel logrus.Level
@@ -50,7 +50,7 @@ func TestNewGlusterfsDriverLogruslevel(t *testing.T) {
 
 	for _, c := range cases {
 		os.Setenv("LOGLEVEL", c.envLevel)
-		_, err := newGlusterfsDriver(root)
+		_, err := NewDriver(root)
 
 		if err != nil {
 			t.Errorf("LOGLEVEL '%v' should not return error", c.envLevel)
@@ -71,7 +71,7 @@ func TestUnsupportedOptionsInMain(t *testing.T) {
 
 	for _, option := range unsupportedOptions {
 		os.Setenv("OPTIONS", option)
-		_, err := newGlusterfsDriver(root)
+		_, err := NewDriver(root)
 
 		if err == nil {
 			t.Errorf("Unsupported option '%v' should return error", option)
@@ -83,7 +83,7 @@ func TestOPTIONvarSetsOptions(t *testing.T) {
 	option_str := "acl log-level=INFO"
 	os.Setenv("OPTIONS", option_str)
 	root := "/myroot"
-	d, err := newGlusterfsDriver(root)
+	d, err := NewDriver(root)
 
 	if err != nil {
 		t.Error("Correct options should not raise error")
@@ -106,7 +106,7 @@ func TestOPTIONdedicatedMount(t *testing.T) {
 	option_str := "acl log-level=INFO dedicated-mount"
 	os.Setenv("OPTIONS", option_str)
 	root := "/myroot"
-	d, err := newGlusterfsDriver(root)
+	d, err := NewDriver(root)
 
 	if err != nil {
 		t.Error("Correct options should not raise error")

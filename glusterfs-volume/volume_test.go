@@ -1,4 +1,4 @@
-package glusterfsdriver
+package glusterfsvolume
 
 import (
 	"reflect"
@@ -7,11 +7,11 @@ import (
 
 func TestGetMountArgs(t *testing.T) {
 	cases := []struct {
-		gv   glusterfsVolume
+		gv   Volume
 		args []string
 	}{
 		{
-			glusterfsVolume{
+			Volume{
 				Servers:    "server1",
 				VolumeName: "volume",
 				Mountpoint: "/mnt",
@@ -20,7 +20,7 @@ func TestGetMountArgs(t *testing.T) {
 				"-o", "log-file=/run/docker/plugins/init-stdout"},
 		},
 		{
-			glusterfsVolume{
+			Volume{
 				Servers:    "server1",
 				VolumeName: "volume",
 				Mountpoint: "/mnt",
@@ -32,7 +32,7 @@ func TestGetMountArgs(t *testing.T) {
 				"-o", "log-file=/run/docker/plugins/init-stdout", "-o", "option1"},
 		},
 		{
-			glusterfsVolume{
+			Volume{
 				Servers:    "server1",
 				VolumeName: "volume",
 				Mountpoint: "/mnt",

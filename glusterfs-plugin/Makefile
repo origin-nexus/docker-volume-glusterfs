@@ -10,7 +10,7 @@ clean:
 
 rootfs:
 	@echo "### docker build rootfs image"
-	@docker build -q -t ${PLUGIN_NAME}:rootfs .
+	@docker build -f Dockerfile -t ${PLUGIN_NAME}:rootfs ..
 	@echo "### create rootfs directory in ./${BUILD_DIR}/rootfs"
 	@mkdir -p ./${BUILD_DIR}/rootfs
 	@docker create --name gluster-tmp ${PLUGIN_NAME}:rootfs
