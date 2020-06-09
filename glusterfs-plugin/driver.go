@@ -46,23 +46,20 @@ func (d *Driver) Create(r *volume.CreateRequest) error {
 
 	d.Lock()
 	defer d.Unlock()
-	conf := glusterfsvolume.Config{
-		Servers:        d.glusterConfig.Servers,
-		VolumeName:     d.glusterConfig.VolumeName,
-		Options:        d.glusterConfig.Options,
-		DedicatedMount: d.glusterConfig.DedicatedMount,
-	}
+	conf := d.glusterConfig
+
+	const optionSetError = "'%v' option already set by driver, can not override."
 
 	for key, val := range r.Options {
 		switch key {
 		case "servers":
 			if conf.Servers != "" {
-				return fmt.Errorf("'%v' option already set by driver, can not override.", key)
+				return fmt.Errorf(optionSetError, key)
 			}
 			conf.Servers = val
 		case "volume-name":
 			if conf.VolumeName != "" {
-				return fmt.Errorf("'%v' option already set by driver, can not override.", key)
+				return fmt.Errorf(optionSetError, key)
 			}
 			conf.VolumeName = val
 		case "dedicated-mount":
@@ -72,7 +69,7 @@ func (d *Driver) Create(r *volume.CreateRequest) error {
 				return err
 			}
 			if len(d.glusterConfig.Options) != 0 {
-				return errors.New("Options already set by driver, can not override.")
+				return errors.New("Gluster options already set by driver, can not override.")
 			}
 			conf.Options[key] = val
 		}
