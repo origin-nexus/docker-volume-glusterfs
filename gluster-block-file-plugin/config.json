@@ -1,0 +1,58 @@
+{
+    "description": "GlusterFS plugin for Docker",
+    "entrypoint": [
+        "/tini",
+        "--",
+        "/gluster-block-file-plugin"
+    ],
+    "env": [
+        {
+            "name": "SERVERS",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "name": "VOLUME_NAME",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "name": "OPTIONS",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "name": "LOGLEVEL",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        }
+    ],
+    "network": {
+        "type": "host"
+    },
+    "propagatedMount": "/mnt",
+    "interface": {
+        "types": [
+            "docker.volumedriver/1.0"
+        ],
+        "socket": "gluster-block-file.sock"
+    },
+    "linux": {
+        "capabilities": [
+            "CAP_SYS_ADMIN"
+        ],
+        "devices": [
+            {
+                "path": "/dev/fuse"
+            }
+        ]
+    }
+}
