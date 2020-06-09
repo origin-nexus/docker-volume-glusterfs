@@ -16,13 +16,33 @@ import (
 )
 
 type DockerVolume struct {
+	glusterfsvolume.MountedVolume
 	GlusterVolumeId string
-	Mountpoint      string
 }
 
 type State struct {
 	DockerVolumes  map[string]*DockerVolume
 	GlusterVolumes glusterfsvolume.State
+}
+
+func (s *State) deleteUnused(gvId string) error {
+	for _, v := range s.DockerVolumes {
+		if v.GlusterVolumeId == gvId {
+			return nil
+		}
+	}
+
+	gv := s.GlusterVolumes[gvId]
+	if err := gv.Unmount(); err != nil {
+		return err
+	}
+	if err := gv.DeleteMountpoint(); err != nil {
+		logrus.Warnf("Error deleting block file mount point: %s", err)
+	}
+
+	delete(s.GlusterVolumes, gvId)
+
+	return nil
 }
 
 type Driver struct {
@@ -88,7 +108,7 @@ func (d *Driver) Create(r *volume.CreateRequest) error {
 	}
 
 	defer d.saveState()
-	defer d.deleteUnused(id)
+	defer d.state.deleteUnused(id)
 
 	gv := d.state.GlusterVolumes[id]
 
@@ -96,26 +116,18 @@ func (d *Driver) Create(r *volume.CreateRequest) error {
 		return err
 	}
 
-	mountpoint := gv.Mountpoint
+	dockerVolume := &DockerVolume{
+		GlusterVolumeId: id,
+		MountedVolume:   glusterfsvolume.MountedVolume{Mountpoint: gv.Mountpoint},
+	}
 	if subdirMount != "" {
-		mountpoint = filepath.Join(mountpoint, subdirMount)
-		// Create subdirectory if required
-		fi, err := os.Lstat(mountpoint)
-		if os.IsNotExist(err) {
-			if err := os.MkdirAll(mountpoint, 0755); err != nil {
-				return err
-			}
-		} else if err != nil {
+		dockerVolume.Mountpoint = filepath.Join(dockerVolume.Mountpoint, subdirMount)
+		if err := dockerVolume.CreateMountpoint(); err != nil {
 			return err
-		}
-
-		if fi != nil && !fi.IsDir() {
-			return fmt.Errorf("'%v' already exist in '%v' volume and it's not a directory",
-				subdirMount, gv.VolumeName)
 		}
 	}
 
-	d.state.DockerVolumes[r.Name] = &DockerVolume{GlusterVolumeId: id, Mountpoint: mountpoint}
+	d.state.DockerVolumes[r.Name] = dockerVolume
 
 	return nil
 }
@@ -170,8 +182,9 @@ func (d *Driver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
 	}
 	logrus.WithField("method", "mount").Debugf("found volume %#v", v)
 
-	d.state.GlusterVolumes[v.GlusterVolumeId].Mount()
-
+	if err := d.state.GlusterVolumes[v.GlusterVolumeId].Mount(); err != nil {
+		return &volume.MountResponse{}, fmt.Errorf("Error mounting Gluster Volume: %s", err)
+	}
 	return &volume.MountResponse{Mountpoint: v.Mountpoint}, nil
 }
 
@@ -199,30 +212,11 @@ func (d *Driver) Remove(r *volume.RemoveRequest) error {
 	gvId := v.GlusterVolumeId
 	delete(d.state.DockerVolumes, r.Name)
 
-	if err := d.deleteUnused(gvId); err != nil {
+	if err := d.state.deleteUnused(gvId); err != nil {
 		return err
 	}
 
 	d.saveState()
-
-	return nil
-}
-
-func (d *Driver) deleteUnused(gvId string) error {
-	gvUsed := false
-	for _, v := range d.state.DockerVolumes {
-		if v.GlusterVolumeId == gvId {
-			gvUsed = true
-			break
-		}
-	}
-	if !gvUsed {
-		gv := d.state.GlusterVolumes[gvId]
-		if err := gv.Unmount(); err != nil {
-			return err
-		}
-		delete(d.state.GlusterVolumes, gvId)
-	}
 
 	return nil
 }

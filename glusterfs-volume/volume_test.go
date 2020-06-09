@@ -7,23 +7,23 @@ import (
 
 func TestGetMountArgs(t *testing.T) {
 	cases := []struct {
-		gv   Volume
+		gv   GlusterfsVolume
 		args []string
 	}{
 		{
-			Volume{
-				Servers:    "server1",
-				VolumeName: "volume",
-				Mountpoint: "/mnt",
+			GlusterfsVolume{
+				Servers:       "server1",
+				VolumeName:    "volume",
+				MountedVolume: MountedVolume{Mountpoint: "/mnt"},
 			},
 			[]string{"-t", "glusterfs", "server1:/volume", "/mnt",
 				"-o", "log-file=/run/docker/plugins/init-stdout"},
 		},
 		{
-			Volume{
-				Servers:    "server1",
-				VolumeName: "volume",
-				Mountpoint: "/mnt",
+			GlusterfsVolume{
+				Servers:       "server1",
+				VolumeName:    "volume",
+				MountedVolume: MountedVolume{Mountpoint: "/mnt"},
 				Options: map[string]string{
 					"option1": "",
 				},
@@ -32,10 +32,10 @@ func TestGetMountArgs(t *testing.T) {
 				"-o", "log-file=/run/docker/plugins/init-stdout", "-o", "option1"},
 		},
 		{
-			Volume{
-				Servers:    "server1",
-				VolumeName: "volume",
-				Mountpoint: "/mnt",
+			GlusterfsVolume{
+				Servers:       "server1",
+				VolumeName:    "volume",
+				MountedVolume: MountedVolume{Mountpoint: "/mnt"},
 				Options: map[string]string{
 					"option": "value",
 				},

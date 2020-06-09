@@ -7,7 +7,7 @@ import (
 	"reflect"
 )
 
-type State map[string]*Volume
+type State map[string]*GlusterfsVolume
 
 type Config struct {
 	DedicatedMount bool
@@ -35,7 +35,7 @@ func CheckOption(key, val string) error {
 
 func (s State) GetOrCreateVolume(config Config, root string) (string, error) {
 	// returns an ID of a Volume, creates the volume if needed.
-	gv := &Volume{
+	gv := &GlusterfsVolume{
 		Servers:    config.Servers,
 		VolumeName: config.VolumeName,
 	}

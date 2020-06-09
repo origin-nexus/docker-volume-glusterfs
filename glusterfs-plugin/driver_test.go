@@ -18,7 +18,7 @@ func TestUnsupportedOptions(t *testing.T) {
 	d := Driver{
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
+			GlusterVolumes: map[string]*glusterfsvolume.GlusterfsVolume{},
 		},
 	}
 	for _, option := range unsupportedOptions {
@@ -42,7 +42,7 @@ func TestNoServerOverride(t *testing.T) {
 		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
+			GlusterVolumes: map[string]*glusterfsvolume.GlusterfsVolume{},
 		},
 	}
 	r := &volume.CreateRequest{
@@ -65,7 +65,7 @@ func TestNoVolumeOverride(t *testing.T) {
 		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
+			GlusterVolumes: map[string]*glusterfsvolume.GlusterfsVolume{},
 		},
 	}
 	r := &volume.CreateRequest{
@@ -111,7 +111,7 @@ func TestSubDirMount(t *testing.T) {
 		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
+			GlusterVolumes: map[string]*glusterfsvolume.GlusterfsVolume{},
 		},
 	}
 	r := &volume.CreateRequest{
@@ -147,7 +147,7 @@ func TestNoSubDirMount(t *testing.T) {
 		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
+			GlusterVolumes: map[string]*glusterfsvolume.GlusterfsVolume{},
 		},
 	}
 	r := &volume.CreateRequest{
@@ -184,7 +184,7 @@ func TestStateSaveAndLoad(t *testing.T) {
 		},
 		state: State{
 			DockerVolumes:  map[string]*DockerVolume{},
-			GlusterVolumes: map[string]*glusterfsvolume.Volume{},
+			GlusterVolumes: map[string]*glusterfsvolume.GlusterfsVolume{},
 		},
 	}
 
