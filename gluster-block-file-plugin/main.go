@@ -13,7 +13,7 @@ import (
 	"github.com/origin-nexus/docker-volume-glusterfs/glusterfs-volume"
 )
 
-const socketAddress = "/run/docker/plugins/gluster-block-file.sock"
+const socketAddress = "/run/docker/plugins/glusterblockfile.sock"
 
 func NewDriver(root string) (*Driver, error) {
 	logrus.WithField("method", "new glusterfs driver").Debug(root)
@@ -78,7 +78,7 @@ func NewDriver(root string) (*Driver, error) {
 
 	return &Driver{
 		root:      root,
-		statePath: filepath.Join(root, "glusterfs-state.json"),
+		statePath: filepath.Join(root, "gluster-block-file-state.json"),
 		glusterConfig: glusterfsvolume.Config{
 			Servers:        servers,
 			VolumeName:     volumeName,

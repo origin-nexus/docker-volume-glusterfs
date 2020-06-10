@@ -43,7 +43,7 @@
         "types": [
             "docker.volumedriver/1.0"
         ],
-        "socket": "gluster-block-file.sock"
+        "socket": "glusterblockfile.sock"
     },
     "linux": {
         "capabilities": [
