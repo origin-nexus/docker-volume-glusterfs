@@ -10,7 +10,7 @@ FROM ubuntu:latest
 RUN apt update && \
     apt install -y software-properties-common && \
     add-apt-repository ppa:gluster/glusterfs-7 && \
-    apt install -y glusterfs-client && \
+    apt install -y glusterfs-client btrfs-progs exfat-utils f2fs-tools dosfstools hfsprogs jfsutils nilfs-tools ntfs-3g reiser4progs reiserfsprogs xfsprogs && \
     apt remove -y --purge software-properties-common && \
     apt autoremove -y && \
     rm -rf /var/lib/apt/lists/*
