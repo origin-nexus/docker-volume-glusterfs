@@ -38,6 +38,14 @@
     "network": {
         "type": "host"
     },
+    "mounts": [
+        {
+            "source": "/dev",
+            "destination": "/dev",
+            "type": "bind",
+            "options": ["rbind"]
+        }
+    ],
     "propagatedMount": "/mnt",
     "interface": {
         "types": [
@@ -49,10 +57,6 @@
         "capabilities": [
             "CAP_SYS_ADMIN"
         ],
-        "devices": [
-            {
-                "path": "/dev/fuse"
-            }
-        ]
+        "allowAllDevices": true
     }
 }
