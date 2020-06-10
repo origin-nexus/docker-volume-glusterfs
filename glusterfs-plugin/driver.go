@@ -66,7 +66,7 @@ func (d *Driver) Create(r *volume.CreateRequest) error {
 
 	d.Lock()
 	defer d.Unlock()
-	conf := d.glusterConfig
+	conf := d.glusterConfig.Copy()
 
 	const optionSetError = "'%v' option already set by driver, can not override."
 

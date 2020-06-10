@@ -123,7 +123,7 @@ func (d *Driver) Create(r *volume.CreateRequest) error {
 
 	d.Lock()
 	defer d.Unlock()
-	glusterConf := d.glusterConfig
+	glusterConf := d.glusterConfig.Copy()
 	blockFileConf := d.blockFileConfig
 
 	const optionSetError = "'%v' option already set by driver, can not override."
@@ -179,9 +179,11 @@ func (d *Driver) Create(r *volume.CreateRequest) error {
 		return err
 	}
 
-	filename := fmt.Sprintf(blockFileConf.filenameFormat, r.Name)
-	if filename == "" {
+	var filename string
+	if blockFileConf.filenameFormat == "" {
 		filename = fmt.Sprintf(defaultFileFormat, r.Name)
+	} else {
+		filename = fmt.Sprintf(blockFileConf.filenameFormat, r.Name)
 	}
 
 	filesystem := blockFileConf.filesystem

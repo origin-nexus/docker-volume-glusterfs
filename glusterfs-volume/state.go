@@ -17,6 +17,17 @@ type Config struct {
 	Options    map[string]string
 }
 
+func (c Config) Copy() Config {
+	config := c
+	config.Options = make(map[string]string)
+
+	for k, v := range c.Options {
+		config.Options[k] = v
+	}
+
+	return config
+}
+
 func CheckOption(key, val string) error {
 	switch key {
 	case "backup-volfile-server":
@@ -38,6 +49,7 @@ func (s State) GetOrCreateVolume(config Config, root string) (string, error) {
 	gv := &GlusterfsVolume{
 		Servers:    config.Servers,
 		VolumeName: config.VolumeName,
+		Options:    make(map[string]string),
 	}
 
 	for key, val := range config.Options {
